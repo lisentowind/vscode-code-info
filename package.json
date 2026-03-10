@@ -3,6 +3,8 @@
   "displayName": "code-info",
   "description": "查看当前项目代码详情",
   "version": "0.0.1",
+  "icon": "resources/icon.png",
+  "publisher": "tingfeng",
   "repository": {
     "type": "git",
     "url": "https://github.com/lisentowind/vscode-code-info.git"
