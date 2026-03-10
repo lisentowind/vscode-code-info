@@ -1,71 +1,46 @@
-# code-info README
+# Code Info
 
-This is the README for your extension "code-info". After writing up a brief description, we recommend including the following sections.
+一个 VS Code 插件项目，用来扫描当前工作区并可视化展示代码统计信息。
 
-## Features
+## 已实现功能
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- 工作区代码统计：文件总数、总行数、代码行、注释行、空行、体积
+- 更精确的多语言注释识别：支持行内块注释、避免字符串内注释误判（近似解析）
+- 语言分布分析：按语言聚合文件数、总代码量和体积
+- 最大文件排行：快速定位体量最大的文件
+- 可视化 Dashboard：在编辑区展示完整统计看板
+- 侧边栏 Overview：在 Activity Bar 中随时查看概览
+- 导出能力：支持导出 `JSON` 和 `CSV`
+- Git 趋势：展示最近 12 周提交趋势和贡献者 Top 5
 
-For example if there is an image subfolder under your extension project workspace:
+## 开发启动
 
-\!\[feature X\]\(images/feature-x.png\)
+```bash
+npm install
+npm run compile
+```
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+然后在 VS Code 中打开本项目，按 `F5` 启动 Extension Development Host。
 
-## Requirements
+## 使用方式
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- 命令面板执行 `Code Info: Analyze Workspace`
+- 点击左侧 Activity Bar 的 `Code Info` 图标查看侧边栏概览
+- 在看板或侧边栏中点击按钮导出 `JSON` / `CSV`
+- 如果工作区是 Git 仓库，会自动展示最近 12 周提交趋势
 
-## Extension Settings
+## 设计说明
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+- 基于官方扩展结构，入口文件为 `src/extension.ts`
+- 使用 `vscode.workspace.findFiles` 扫描工作区文件
+- 使用 `WebviewPanel` 实现详细 Dashboard
+- 使用 `WebviewViewProvider` 实现侧边栏视图
+- 内置纯前端图表，不依赖外部 CDN，方便本地调试和打包
+- Git 趋势通过本地 `git log` 获取，不上传代码内容
 
-For example:
+## 后续可继续增强
 
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+- 按目录维度统计模块规模
+- 增加测试覆盖率、TODO 数量等工程指标
+- 支持基于语法树/语法高亮的注释解析（进一步提升准确度）
+- 支持导出 HTML 报告

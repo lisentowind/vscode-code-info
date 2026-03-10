@@ -1,0 +1,37 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M40 28
+       C30 28, 30 40, 30 48
+       C30 56, 26 60, 20 60
+       C26 60, 30 64, 30 72
+       C30 80, 30 92, 40 92"
+    stroke="#2E83D3"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+  <path
+    d="M88 28
+       C98 28, 98 40, 98 48
+       C98 56, 102 60, 108 60
+       C102 60, 98 64, 98 72
+       C98 80, 98 92, 88 92"
+    stroke="#2E83D3"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  />
+  <text
+    x="64"
+    y="64"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="Segoe UI, Arial, sans-serif"
+    font-size="32"
+    font-weight="700"
+    letter-spacing="-0.5"
+    fill="#36CFC9"
+  >info</text>
+</svg>
