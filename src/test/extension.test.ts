@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { countTextMetrics } from '../analysis/lineMetrics';
-import { buildDirectorySummaries } from '../analysis/summaries';
+import { buildDirectorySummaries, buildDirectoryTree } from '../analysis/summaries';
 import type { FileStat } from '../types';
 
 suite('Extension Test Suite', () => {
@@ -58,5 +58,39 @@ suite('Extension Test Suite', () => {
     assert.strictEqual(summaries[0].path, 'app/src/feature');
     assert.strictEqual(summaries[0].codeLines, 30);
     assert.strictEqual(summaries.some((item) => item.path === '(root)'), true);
+  });
+
+  test('buildDirectoryTree keeps nested directory aggregation', () => {
+    const files: FileStat[] = [
+      {
+        resource: 'file:///workspace/app/src/feature/a.ts',
+        path: 'app/src/feature/a.ts',
+        language: 'typescript',
+        lines: 10,
+        codeLines: 10,
+        commentLines: 0,
+        blankLines: 0,
+        bytes: 100,
+        todoCounts: { total: 1, todo: 1, fixme: 0, hack: 0 }
+      },
+      {
+        resource: 'file:///workspace/app/src/utils/b.ts',
+        path: 'app/src/utils/b.ts',
+        language: 'typescript',
+        lines: 6,
+        codeLines: 6,
+        commentLines: 0,
+        blankLines: 0,
+        bytes: 60,
+        todoCounts: { total: 0, todo: 0, fixme: 0, hack: 0 }
+      }
+    ];
+
+    const tree = buildDirectoryTree(files, ['app']);
+
+    assert.strictEqual(tree[0].path, 'app');
+    assert.strictEqual(tree[0].codeLines, 16);
+    assert.strictEqual(tree[0].children[0].path, 'app/src');
+    assert.strictEqual(tree[0].children[0].children.length, 2);
   });
 });

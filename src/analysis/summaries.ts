@@ -1,5 +1,6 @@
 import type {
   DirectorySummary,
+  DirectoryTreeNode,
   FileStat,
   LanguageSummary,
   TodoHotspot,
@@ -87,6 +88,31 @@ export function buildDirectorySummaries(
     .slice(0, 12);
 }
 
+export function buildDirectoryTree(files: FileStat[], workspaceFolderNames: readonly string[]): DirectoryTreeNode[] {
+  const folderNames = new Set(workspaceFolderNames);
+  const roots = new Map<string, MutableDirectoryTreeNode>();
+
+  for (const file of files) {
+    const segments = toTreeSegments(file.path, folderNames);
+    if (segments.length === 0) {
+      accumulateNode(getOrCreateNode(roots, '(root)', '(root)'), file);
+      continue;
+    }
+
+    let currentMap = roots;
+    let currentPath = '';
+
+    for (const segment of segments) {
+      currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+      const node = getOrCreateNode(currentMap, segment, currentPath);
+      accumulateNode(node, file);
+      currentMap = node.children;
+    }
+  }
+
+  return sortTreeNodes(roots);
+}
+
 export function buildTodoSummary(files: FileStat[]): TodoKeywordSummary[] {
   const totals = files.reduce(
     (accumulator, file) => {
@@ -161,4 +187,80 @@ function toModulePath(filePath: string, folderNames: Set<string>, moduleDepth: n
 
   const prefix = startsWithWorkspaceFolder ? [segments[0], ...remaining] : remaining;
   return prefix.join('/');
+}
+
+function toTreeSegments(filePath: string, folderNames: Set<string>): string[] {
+  const segments = filePath.split('/').filter(Boolean);
+  if (segments.length <= 1) {
+    return [];
+  }
+
+  const directorySegments = segments.slice(0, -1);
+  if (directorySegments.length === 0) {
+    return [];
+  }
+
+  const startsWithWorkspaceFolder = folderNames.has(directorySegments[0]);
+  if (startsWithWorkspaceFolder) {
+    return directorySegments;
+  }
+
+  return directorySegments;
+}
+
+type MutableDirectoryTreeNode = Omit<DirectoryTreeNode, 'children'> & {
+  children: Map<string, MutableDirectoryTreeNode>;
+};
+
+function getOrCreateNode(
+  nodes: Map<string, MutableDirectoryTreeNode>,
+  name: string,
+  path: string
+): MutableDirectoryTreeNode {
+  const existing = nodes.get(name);
+  if (existing) {
+    return existing;
+  }
+
+  const created: MutableDirectoryTreeNode = {
+    name,
+    path,
+    files: 0,
+    lines: 0,
+    codeLines: 0,
+    commentLines: 0,
+    blankLines: 0,
+    bytes: 0,
+    todoCount: 0,
+    children: new Map()
+  };
+  nodes.set(name, created);
+  return created;
+}
+
+function accumulateNode(node: MutableDirectoryTreeNode, file: FileStat): void {
+  node.files += 1;
+  node.lines += file.lines;
+  node.codeLines += file.codeLines;
+  node.commentLines += file.commentLines;
+  node.blankLines += file.blankLines;
+  node.bytes += file.bytes;
+  node.todoCount += file.todoCounts.total;
+}
+
+function sortTreeNodes(nodes: Map<string, MutableDirectoryTreeNode>): DirectoryTreeNode[] {
+  return [...nodes.values()]
+    .sort((left, right) => right.codeLines - left.codeLines || right.files - left.files)
+    .map((node) => ({
+      path: node.path,
+      name: node.name,
+      files: node.files,
+      lines: node.lines,
+      codeLines: node.codeLines,
+      commentLines: node.commentLines,
+      blankLines: node.blankLines,
+      bytes: node.bytes,
+      todoCount: node.todoCount,
+      children: sortTreeNodes(node.children)
+    }));
 }

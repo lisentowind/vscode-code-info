@@ -2,7 +2,7 @@
   "name": "code-info",
   "displayName": "code-info",
   "description": "查看当前项目代码详情",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "icon": "resources/icon.png",
   "publisher": "tingfeng",
   "repository": {
@@ -51,24 +51,30 @@
         "category": "Code Info",
         "shortTitle": "Refresh"
       },
-        {
-          "command": "codeInfo.export",
-          "title": "Export",
-          "category": "Code Info",
-          "shortTitle": "Export"
-        },
-        {
-          "command": "codeInfo.exportJson",
-          "title": "Export JSON",
-          "category": "Code Info",
-          "shortTitle": "JSON"
-        },
-        {
-          "command": "codeInfo.exportCsv",
-          "title": "Export CSV",
-          "category": "Code Info",
-          "shortTitle": "CSV"
-        }
+      {
+        "command": "codeInfo.refreshTodayStats",
+        "title": "Refresh Today Stats",
+        "category": "Code Info",
+        "shortTitle": "Today"
+      },
+      {
+        "command": "codeInfo.export",
+        "title": "Export",
+        "category": "Code Info",
+        "shortTitle": "Export"
+      },
+      {
+        "command": "codeInfo.exportJson",
+        "title": "Export JSON",
+        "category": "Code Info",
+        "shortTitle": "JSON"
+      },
+      {
+        "command": "codeInfo.exportCsv",
+        "title": "Export CSV",
+        "category": "Code Info",
+        "shortTitle": "CSV"
+      }
     ],
     "configuration": {
       "title": "Code Info",
@@ -126,6 +132,11 @@
           "command": "codeInfo.refreshStats",
           "when": "view == codeInfo.sidebar",
           "group": "navigation@1"
+        },
+        {
+          "command": "codeInfo.refreshTodayStats",
+          "when": "view == codeInfo.sidebar",
+          "group": "navigation@1.5"
         },
         {
           "command": "codeInfo.export",

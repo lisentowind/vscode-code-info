@@ -11,6 +11,9 @@ export async function handleWebviewCommand(message?: WebviewCommandMessage): Pro
     case 'refresh':
       await vscode.commands.executeCommand('codeInfo.refreshStats');
       return;
+    case 'refreshToday':
+      await vscode.commands.executeCommand('codeInfo.refreshTodayStats');
+      return;
     case 'selectScope':
       await vscode.commands.executeCommand('codeInfo.selectAnalysisDirectories');
       return;

@@ -39,6 +39,19 @@ export type DirectorySummary = {
   todoCount: number;
 };
 
+export type DirectoryTreeNode = {
+  path: string;
+  name: string;
+  files: number;
+  lines: number;
+  codeLines: number;
+  commentLines: number;
+  blankLines: number;
+  bytes: number;
+  todoCount: number;
+  children: DirectoryTreeNode[];
+};
+
 export type TodoKeywordSummary = {
   keyword: string;
   count: number;
@@ -87,6 +100,7 @@ export type WorkspaceStats = {
   totals: WorkspaceTotals;
   languages: LanguageSummary[];
   directories: DirectorySummary[];
+  directoryTree: DirectoryTreeNode[];
   largestFiles: FileStat[];
   files: FileStat[];
   todoSummary: TodoKeywordSummary[];
@@ -94,6 +108,45 @@ export type WorkspaceStats = {
   insights: WorkspaceInsights;
   analysisMeta: AnalysisMeta;
   git: GitStats;
+};
+
+export type TodayFileStat = FileStat & {
+  status: 'new' | 'modified';
+  modifiedAt: string;
+};
+
+export type TodayTotals = {
+  touchedFiles: number;
+  newFiles: number;
+  lines: number;
+  codeLines: number;
+  commentLines: number;
+  blankLines: number;
+  bytes: number;
+  todoCount: number;
+};
+
+export type TodayInsights = {
+  topLanguage: string;
+  topLanguageShare: number;
+  topPath: string;
+  todoTouchedCount: number;
+};
+
+export type TodayStats = {
+  workspaceName: string;
+  generatedAt: string;
+  totals: TodayTotals;
+  languages: LanguageSummary[];
+  touchedFiles: TodayFileStat[];
+  newFiles: TodayFileStat[];
+  insights: TodayInsights;
+  analysisMeta: AnalysisMeta;
+};
+
+export type DashboardData = {
+  projectStats?: WorkspaceStats;
+  todayStats?: TodayStats;
 };
 
 export type WorkspaceInsights = {
