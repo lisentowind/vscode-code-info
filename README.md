@@ -25,6 +25,7 @@ npm run compile
 ## 使用方式
 
 - 命令面板执行 `Code Info: Analyze Workspace`
+- 如需只分析部分目录：执行 `Code Info: Select Analysis Directories`，或在设置里配置 `codeInfo.analysis.directories`
 - 点击左侧 Activity Bar 的 `Code Info` 图标查看侧边栏概览
 - 在看板或侧边栏中点击按钮导出 `JSON` / `CSV`
 - 如果工作区是 Git 仓库，会自动展示最近 12 周提交趋势

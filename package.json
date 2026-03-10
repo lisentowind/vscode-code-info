@@ -34,6 +34,12 @@
         "shortTitle": "Analyze"
       },
       {
+        "command": "codeInfo.selectAnalysisDirectories",
+        "title": "Select Analysis Directories",
+        "category": "Code Info",
+        "shortTitle": "Scope"
+      },
+      {
         "command": "codeInfo.openPanel",
         "title": "Dashboard",
         "category": "Code Info",
@@ -45,25 +51,39 @@
         "category": "Code Info",
         "shortTitle": "Refresh"
       },
-      {
-        "command": "codeInfo.export",
-        "title": "Export",
-        "category": "Code Info",
-        "shortTitle": "Export"
-      },
-      {
-        "command": "codeInfo.exportJson",
-        "title": "Export JSON",
-        "category": "Code Info",
-        "shortTitle": "JSON"
-      },
-      {
-        "command": "codeInfo.exportCsv",
-        "title": "Export CSV",
-        "category": "Code Info",
-        "shortTitle": "CSV"
-      }
+        {
+          "command": "codeInfo.export",
+          "title": "Export",
+          "category": "Code Info",
+          "shortTitle": "Export"
+        },
+        {
+          "command": "codeInfo.exportJson",
+          "title": "Export JSON",
+          "category": "Code Info",
+          "shortTitle": "JSON"
+        },
+        {
+          "command": "codeInfo.exportCsv",
+          "title": "Export CSV",
+          "category": "Code Info",
+          "shortTitle": "CSV"
+        }
     ],
+    "configuration": {
+      "title": "Code Info",
+      "properties": {
+        "codeInfo.analysis.directories": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "scope": "window",
+          "description": "限制分析范围到指定目录。空数组表示分析整个工作区。单根工作区示例：['src','packages/app']。多根工作区可用 'workspaceFolderName:dir' 仅分析某个根，例如：['client:src','server:src']。"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -88,6 +108,11 @@
           "command": "codeInfo.openPanel",
           "when": "view == codeInfo.sidebar",
           "group": "navigation"
+        },
+        {
+          "command": "codeInfo.selectAnalysisDirectories",
+          "when": "view == codeInfo.sidebar",
+          "group": "navigation@0"
         },
         {
           "command": "codeInfo.refreshStats",
