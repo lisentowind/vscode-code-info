@@ -3,6 +3,10 @@
   "displayName": "code-info",
   "description": "查看当前项目代码详情",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lisentowind/vscode-code-info.git"
+  },
   "engines": {
     "vscode": "^1.110.0"
   },
