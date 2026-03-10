@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 
 const CONFIG_SECTION = 'codeInfo';
 const CONFIG_ANALYSIS_DIRECTORIES = 'analysis.directories';
+const CONFIG_ANALYSIS_MODULE_DEPTH = 'analysis.moduleDepth';
 
 export function getAnalysisDirectoriesSetting(): string[] {
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
@@ -15,8 +16,17 @@ export function getAnalysisDirectoriesSetting(): string[] {
     .filter(Boolean);
 }
 
+export function getAnalysisModuleDepthSetting(): number {
+  const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+  const value = config.get<number>(CONFIG_ANALYSIS_MODULE_DEPTH, 1);
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.min(4, Math.max(1, Math.trunc(value)));
+}
+
 export async function updateAnalysisDirectoriesSetting(value: string[]): Promise<void> {
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
   await config.update(CONFIG_ANALYSIS_DIRECTORIES, value, vscode.ConfigurationTarget.Workspace);
 }
-

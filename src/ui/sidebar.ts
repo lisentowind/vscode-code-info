@@ -1,19 +1,20 @@
 import * as vscode from 'vscode';
 import type { PresentationMode, WorkspaceStats } from '../types';
 import { getDashboardHtml, getEmptyStateHtml } from '../webview/templates';
+import type { WebviewCommandMessage } from './webviewCommands';
 
 export class CodeInfoSidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codeInfo.sidebar';
   private view: vscode.WebviewView | undefined;
   private latest: WorkspaceStats | undefined;
 
-  public constructor(private readonly onCommand: (command?: string) => void | Promise<void>) { }
+  public constructor(private readonly onCommand: (message?: WebviewCommandMessage) => void | Promise<void>) { }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.view = webviewView;
     webviewView.webview.options = { enableScripts: true };
-    webviewView.webview.onDidReceiveMessage((message: { command?: string }) => {
-      void this.onCommand(message.command);
+    webviewView.webview.onDidReceiveMessage((message: WebviewCommandMessage) => {
+      void this.onCommand(message);
     });
 
     this.render(this.latest);

@@ -1,4 +1,5 @@
 export type FileStat = {
+  resource: string;
   path: string;
   language: string;
   lines: number;
@@ -6,6 +7,7 @@ export type FileStat = {
   commentLines: number;
   blankLines: number;
   bytes: number;
+  todoCounts: TodoCounts;
 };
 
 export type LanguageSummary = {
@@ -16,6 +18,40 @@ export type LanguageSummary = {
   commentLines: number;
   blankLines: number;
   bytes: number;
+  todoCount: number;
+};
+
+export type TodoCounts = {
+  total: number;
+  todo: number;
+  fixme: number;
+  hack: number;
+};
+
+export type DirectorySummary = {
+  path: string;
+  files: number;
+  lines: number;
+  codeLines: number;
+  commentLines: number;
+  blankLines: number;
+  bytes: number;
+  todoCount: number;
+};
+
+export type TodoKeywordSummary = {
+  keyword: string;
+  count: number;
+};
+
+export type TodoHotspot = {
+  resource: string;
+  path: string;
+  language: string;
+  total: number;
+  todo: number;
+  fixme: number;
+  hack: number;
 };
 
 export type GitWeek = {
@@ -50,9 +86,34 @@ export type WorkspaceStats = {
   generatedAt: string;
   totals: WorkspaceTotals;
   languages: LanguageSummary[];
+  directories: DirectorySummary[];
   largestFiles: FileStat[];
   files: FileStat[];
+  todoSummary: TodoKeywordSummary[];
+  todoHotspots: TodoHotspot[];
+  insights: WorkspaceInsights;
+  analysisMeta: AnalysisMeta;
   git: GitStats;
+};
+
+export type WorkspaceInsights = {
+  averageLinesPerFile: number;
+  averageCodeLinesPerFile: number;
+  commentRatio: number;
+  topLanguage: string;
+  topLanguageShare: number;
+  topDirectory: string;
+  totalTodoCount: number;
+  todoDensity: number;
+};
+
+export type AnalysisMeta = {
+  durationMs: number;
+  matchedFiles: number;
+  analyzedFiles: number;
+  skippedBinaryFiles: number;
+  skippedUnreadableFiles: number;
+  scopeSummary: string;
 };
 
 export type PresentationMode = {
@@ -64,4 +125,3 @@ export type PresentationMode = {
 export type Logger = {
   appendLine(message: string): void;
 };
-

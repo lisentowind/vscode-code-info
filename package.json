@@ -81,6 +81,14 @@
           },
           "scope": "window",
           "description": "限制分析范围到指定目录。空数组表示分析整个工作区。单根工作区示例：['src','packages/app']。多根工作区可用 'workspaceFolderName:dir' 仅分析某个根，例如：['client:src','server:src']。"
+        },
+        "codeInfo.analysis.moduleDepth": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 4,
+          "scope": "window",
+          "description": "模块统计按几级目录聚合。1 表示按顶层目录统计，2 表示按两级目录统计。"
         }
       }
     },

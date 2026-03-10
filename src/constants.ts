@@ -3,6 +3,36 @@ export const DEFAULT_EXCLUDES =
 
 export const GIT_WEEKS = 12;
 
+export const BINARY_EXTENSIONS = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'ico',
+  'pdf',
+  'zip',
+  'gz',
+  'tar',
+  'jar',
+  'class',
+  'exe',
+  'dll',
+  'so',
+  'dylib',
+  'mp3',
+  'mp4',
+  'mov',
+  'avi',
+  'woff',
+  'woff2',
+  'ttf',
+  'eot',
+  'lock'
+]);
+
+export const TODO_KEYWORDS = ['TODO', 'FIXME', 'HACK'] as const;
+
 export const COMMENT_PREFIXES: Record<string, string[]> = {
   javascript: ['//'],
   typescript: ['//'],
@@ -76,4 +106,3 @@ export const STRING_DELIMITERS: Record<string, string[]> = {
   go: ['`', '"', "'"],
   python: ['"""', "'''", '"', "'"]
 };
-

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { PresentationMode, WorkspaceStats } from '../types';
 import { getDashboardHtml, getEmptyStateHtml } from '../webview/templates';
+import type { WebviewCommandMessage } from './webviewCommands';
 
 export type DashboardPanelState = {
   panel: vscode.WebviewPanel | undefined;
@@ -24,7 +25,7 @@ export function updatePanelIfOpen(
 export function showStatsPanel(
   state: DashboardPanelState,
   stats: WorkspaceStats,
-  onCommand: (command?: string) => void | Promise<void>
+  onCommand: (message?: WebviewCommandMessage) => void | Promise<void>
 ): void {
   if (!state.panel) {
     state.panel = vscode.window.createWebviewPanel('codeInfoStats', `Code Info · ${stats.workspaceName}`, vscode.ViewColumn.One, {
@@ -36,8 +37,8 @@ export function showStatsPanel(
       state.panel = undefined;
     });
 
-    state.panel.webview.onDidReceiveMessage((message: { command?: string }) => {
-      void onCommand(message.command);
+    state.panel.webview.onDidReceiveMessage((message: WebviewCommandMessage) => {
+      void onCommand(message);
     });
   }
 
@@ -48,7 +49,7 @@ export function showStatsPanel(
 
 export function showDashboardEmptyPanel(
   state: DashboardPanelState,
-  onCommand: (command?: string) => void | Promise<void>
+  onCommand: (message?: WebviewCommandMessage) => void | Promise<void>
 ): void {
   if (!state.panel) {
     state.panel = vscode.window.createWebviewPanel('codeInfoStats', 'Code Info · Dashboard', vscode.ViewColumn.One, {
@@ -60,8 +61,8 @@ export function showDashboardEmptyPanel(
       state.panel = undefined;
     });
 
-    state.panel.webview.onDidReceiveMessage((message: { command?: string }) => {
-      void onCommand(message.command);
+    state.panel.webview.onDidReceiveMessage((message: WebviewCommandMessage) => {
+      void onCommand(message);
     });
   }
 

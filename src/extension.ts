@@ -122,4 +122,3 @@ async function analyzeAndSync(
     return undefined;
   }
 }
-

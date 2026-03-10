@@ -1,7 +1,13 @@
 import * as vscode from 'vscode';
+import { openResource } from './resourceNavigator';
 
-export async function handleWebviewCommand(command?: string): Promise<void> {
-  switch (command) {
+export type WebviewCommandMessage = {
+  command?: string;
+  resource?: string;
+};
+
+export async function handleWebviewCommand(message?: WebviewCommandMessage): Promise<void> {
+  switch (message?.command) {
     case 'refresh':
       await vscode.commands.executeCommand('codeInfo.refreshStats');
       return;
@@ -19,6 +25,9 @@ export async function handleWebviewCommand(command?: string): Promise<void> {
       return;
     case 'exportCsv':
       await vscode.commands.executeCommand('codeInfo.exportCsv');
+      return;
+    case 'openFile':
+      await openResource(message.resource);
       return;
     default:
       return;

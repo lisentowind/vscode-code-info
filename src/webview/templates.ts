@@ -76,7 +76,7 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
       --text: var(--vscode-editor-foreground);
       --muted: var(--vscode-descriptionForeground);
       --accent: var(--vscode-textLink-foreground);
-      --accent-soft: color-mix(in srgb, var(--accent) 15%, transparent);
+      --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
       font-family: var(--vscode-font-family);
     }
     * { box-sizing: border-box; }
@@ -85,7 +85,7 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
     .page { display: grid; gap: 16px; }
     .hero, .card, .panel {
       border: 1px solid var(--border);
-      border-radius: 12px; /* 稍微减小圆角显得更干练 */
+      border-radius: 12px;
       background: var(--panel);
       min-width: 0;
     }
@@ -115,33 +115,40 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
       color: var(--accent);
       border-color: var(--border);
     }
+    .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
     .badge {
       border-radius: 999px;
       padding: 6px 12px;
       background: var(--accent-soft);
       color: var(--accent);
-      white-space: normal;
-      max-width: 100%;
       font-size: 12px;
+      max-width: 100%;
     }
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
     .card, .panel { padding: 16px; }
     .metric-label { font-size: 12px; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px; }
-    .metric-value { font-size: 26px; font-weight: 600; }
-    .metric-sub { margin-top: 8px; font-size: 12px; color: var(--muted); }
-    .grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 16px; }
+    .metric-value { font-size: 24px; font-weight: 600; }
+    .metric-sub { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 16px; }
     .panel h2 { margin: 0 0 6px; font-size: 15px; }
-    .section-note { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
-    .bars, .legend, .git-bars, .authors { display: grid; gap: 12px; }
+    .section-note { color: var(--muted); font-size: 12px; margin: 0 0 14px; line-height: 1.5; }
+    .bars, .legend, .git-bars, .authors, .todo-summary { display: grid; gap: 12px; }
     .bar-row, .git-block { display: grid; gap: 6px; }
-    .bar-head, .legend-item, .author-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-size: 13px; flex-wrap: wrap; min-width: 0; }
+    .bar-head, .legend-item, .author-item, .todo-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      font-size: 13px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
     .bar-track, .mini-track {
       height: 8px;
       border-radius: 999px;
       overflow: hidden;
       background: color-mix(in srgb, var(--text) 8%, transparent);
     }
-    /* 移除紫蓝色渐变，使用主题色和透明度，更加严谨 */
     .bar-fill, .mini-fill { height: 100%; border-radius: inherit; background: var(--accent); opacity: 0.85; }
     .stack {
       display: flex;
@@ -151,8 +158,8 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
       background: color-mix(in srgb, var(--text) 8%, transparent);
       margin-bottom: 14px;
     }
-    .legend-left, .author-left { display: flex; align-items: center; gap: 8px; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .legend-left, .author-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
     .git-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .git-note {
       padding: 12px;
@@ -166,11 +173,25 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
     table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); vertical-align: top; }
     th { color: var(--muted); font-weight: 600; }
-    /* 路径列放宽并允许换行，避免太宽撑破容器 */
-    td.mono { font-family: var(--vscode-editor-font-family); white-space: normal; word-break: break-all; min-width: 150px; }
+    td.mono { font-family: var(--vscode-editor-font-family); white-space: normal; word-break: break-all; min-width: 160px; }
     .muted { color: var(--muted); }
-
-    /* 侧边栏/紧凑模式响应式调整 */
+    .link-button {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--accent);
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+      word-break: break-all;
+    }
+    .empty-note {
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
     body.compact .page { gap: 12px; }
     body.compact .hero { flex-direction: column; padding: 14px; gap: 12px; }
     body.compact .grid, body.compact .git-grid { grid-template-columns: 1fr; }
@@ -178,12 +199,11 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
     body.compact .action { padding: 6px 10px; }
     body.compact .metric-value { font-size: 22px; }
     body.compact .card, body.compact .panel { padding: 14px; }
-
     @media (max-width: 960px) {
       .grid, .git-grid { grid-template-columns: 1fr; }
       .hero { flex-direction: column; }
     }
-    @media (max-width: 260px) {
+    @media (max-width: 320px) {
       .cards { grid-template-columns: 1fr; }
     }
   </style>
@@ -195,8 +215,12 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const errorBox = document.getElementById('error');
+    const palette = ['#5B8FF9', '#5AD8A6', '#5D7092', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99', '#FF99C3'];
+
     function showError(err) {
-      if (!errorBox) return;
+      if (!errorBox) {
+        return;
+      }
       errorBox.style.display = 'block';
       errorBox.textContent = String(err && (err.stack || err.message) ? (err.stack || err.message) : err);
     }
@@ -217,11 +241,8 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
       stats = undefined;
       presentation = { compact: false, title: 'Code Info', subtitle: '' };
     }
+
     const app = document.getElementById('app');
-
-    // 替换为更加专业、克制的数据可视化色板 (类似 AntV 经典色调)
-    const palette = ['#5B8FF9', '#5AD8A6', '#5D7092', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99', '#FF99C3'];
-
     if (!stats || !app) {
       showError('No stats payload. Try running Analyze again.');
     }
@@ -250,6 +271,15 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
       return ((value / total) * 100).toFixed(1) + '%';
     }
 
+    function durationFormat(value) {
+      if (value < 1000) return value + ' ms';
+      return (value / 1000).toFixed(2) + ' s';
+    }
+
+    function densityFormat(value) {
+      return value === 0 ? '0 / KLOC' : (value * 1000).toFixed(1) + ' / KLOC';
+    }
+
     function metricCard(label, value, sub) {
       return '<div class="card">' +
         '<div class="metric-label">' + escapeHtml(label) + '</div>' +
@@ -258,27 +288,34 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
       '</div>';
     }
 
-    function renderLanguageBars(languages) {
-      const max = languages[0]?.codeLines ?? 1;
-      const items = languages.slice(0, presentation.compact ? 6 : 8);
+    function fileButton(path, resource) {
+      return '<button class="link-button" data-command="openFile" data-resource="' + escapeHtml(resource) + '">' + escapeHtml(path) + '</button>';
+    }
+
+    function renderBarList(items, valueKey, formatter, emptyText) {
+      if (!items.length) {
+        return '<div class="empty-note">' + escapeHtml(emptyText) + '</div>';
+      }
+
+      const max = items[0]?.[valueKey] ?? 1;
       return items.map((item) => {
-        const width = Math.max((item.codeLines / max) * 100, 2);
+        const value = item[valueKey];
+        const width = Math.max((value / Math.max(max, 1)) * 100, value > 0 ? 3 : 0);
         return '<div class="bar-row">' +
-          '<div class="bar-head"><span>' + escapeHtml(item.language) + '</span><span class="muted">' + numberFormat(item.codeLines) + ' 行</span></div>' +
+          '<div class="bar-head"><span>' + escapeHtml(item.path || item.language || item.keyword) + '</span><span class="muted">' + formatter(value, item) + '</span></div>' +
           '<div class="bar-track"><div class="bar-fill" style="width:' + width + '%"></div></div>' +
         '</div>';
       }).join('');
     }
 
     function renderComposition() {
-      // 匹配新的专业色板：蓝(代码)、绿(注释)、灰蓝(空行)
       const items = [
         { label: '代码行', value: stats.totals.codeLines, color: '#5B8FF9' },
         { label: '注释行', value: stats.totals.commentLines, color: '#5AD8A6' },
         { label: '空行', value: stats.totals.blankLines, color: '#5D7092' }
       ];
       const total = Math.max(stats.totals.lines, 1);
-      const stack = items.map((item) => '<div style="width:' + (item.value / total * 100) + '%;background:' + item.color + '"></div>').join('');
+      const stack = items.map((item) => '<div style="width:' + ((item.value / total) * 100) + '%;background:' + item.color + '"></div>').join('');
       const legend = items.map((item) => {
         return '<div class="legend-item">' +
           '<div class="legend-left"><span class="dot" style="background:' + item.color + '"></span><span>' + escapeHtml(item.label) + '</span></div>' +
@@ -316,33 +353,66 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
       '</div>';
     }
 
-    function renderLargestFiles(files) {
-      const items = files.slice(0, presentation.compact ? 5 : 10);
-      return items.map((file) => '<tr>' +
-        '<td class="mono">' + escapeHtml(file.path) + '</td>' +
+    function renderLanguageTable(items) {
+      return items.slice(0, presentation.compact ? 8 : 12).map((language, index) => '<tr>' +
+        '<td><span class="dot" style="background:' + palette[index % palette.length] + '"></span> ' + escapeHtml(language.language) + '</td>' +
+        '<td>' + numberFormat(language.files) + '</td>' +
+        '<td>' + numberFormat(language.codeLines) + '</td>' +
+        '<td>' + bytesFormat(language.bytes) + '</td>' +
+        '<td>' + numberFormat(language.todoCount) + '</td>' +
+      '</tr>').join('');
+    }
+
+    function renderLargestFiles(items) {
+      return items.slice(0, presentation.compact ? 5 : 10).map((file) => '<tr>' +
+        '<td class="mono">' + fileButton(file.path, file.resource) + '</td>' +
         '<td>' + escapeHtml(file.language) + '</td>' +
         '<td>' + numberFormat(file.lines) + '</td>' +
         '<td>' + numberFormat(file.codeLines) + '</td>' +
-        '<td>' + bytesFormat(file.bytes) + '</td>' +
+        '<td>' + numberFormat(file.todoCounts.total) + '</td>' +
       '</tr>').join('');
     }
 
-    function renderLanguageTable(languages) {
-      return languages.slice(0, presentation.compact ? 8 : 12).map((language, index) => '<tr>' +
-        '<td><span class="dot" style="background:' + palette[index % palette.length] + '"></span> ' + escapeHtml(language.language) + '</td>' +
-        '<td>' + numberFormat(language.files) + '</td>' +
-        '<td>' + numberFormat(language.lines) + '</td>' +
-        '<td>' + numberFormat(language.codeLines) + '</td>' +
-        '<td>' + bytesFormat(language.bytes) + '</td>' +
-      '</tr>').join('');
+    function renderTodoSummary(items) {
+      if (!items.length) {
+        return '<div class="empty-note">暂无 TODO / FIXME / HACK 标记。</div>';
+      }
+
+      return '<div class="todo-summary">' + items.map((item) => '<div class="todo-item">' +
+        '<span>' + escapeHtml(item.keyword) + '</span>' +
+        '<span class="muted">' + numberFormat(item.count) + '</span>' +
+      '</div>').join('') + '</div>';
     }
 
-    // 增加了 .table-wrap 容器包裹 table
+    function renderTodoHotspots(items) {
+      if (!items.length) {
+        return '<div class="empty-note">未发现待办热点文件。</div>';
+      }
+
+      return '<div class="table-wrap"><table>' +
+        '<thead><tr><th>文件</th><th>语言</th><th>总数</th><th>TODO</th><th>FIXME</th><th>HACK</th></tr></thead>' +
+        '<tbody>' + items.slice(0, presentation.compact ? 5 : 10).map((file) => '<tr>' +
+          '<td class="mono">' + fileButton(file.path, file.resource) + '</td>' +
+          '<td>' + escapeHtml(file.language) + '</td>' +
+          '<td>' + numberFormat(file.total) + '</td>' +
+          '<td>' + numberFormat(file.todo) + '</td>' +
+          '<td>' + numberFormat(file.fixme) + '</td>' +
+          '<td>' + numberFormat(file.hack) + '</td>' +
+        '</tr>').join('') + '</tbody>' +
+      '</table></div>';
+    }
+
     app.innerHTML = '' +
       '<section class="hero">' +
         '<div>' +
           '<h1>' + escapeHtml(presentation.title) + '</h1>' +
           '<p>' + escapeHtml(presentation.subtitle) + '<br>生成时间：' + escapeHtml(stats.generatedAt) + '</p>' +
+          '<div class="badges">' +
+            '<span class="badge">范围：' + escapeHtml(stats.analysisMeta.scopeSummary) + '</span>' +
+            '<span class="badge">分析 ' + numberFormat(stats.analysisMeta.analyzedFiles) + ' / ' + numberFormat(stats.analysisMeta.matchedFiles) + ' 文件</span>' +
+            '<span class="badge">跳过二进制 ' + numberFormat(stats.analysisMeta.skippedBinaryFiles) + '</span>' +
+            '<span class="badge">耗时 ' + escapeHtml(durationFormat(stats.analysisMeta.durationMs)) + '</span>' +
+          '</div>' +
         '</div>' +
         '<div class="actions">' +
           '<button class="action" data-command="refresh">重新分析</button>' +
@@ -350,27 +420,40 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
           '<button class="action secondary" data-command="openPanel">详细看板</button>' +
           '<button class="action secondary" data-command="exportJson">导出 JSON</button>' +
           '<button class="action secondary" data-command="exportCsv">导出 CSV</button>' +
-          '<span class="badge">共 ' + numberFormat(stats.totals.files) + ' 个文件</span>' +
         '</div>' +
       '</section>' +
       '<section class="cards">' +
         metricCard('总文件数', numberFormat(stats.totals.files), '参与统计的文本文件') +
-        metricCard('总行数', numberFormat(stats.totals.lines), '代码 / 注释 / 空行') +
         metricCard('代码行', numberFormat(stats.totals.codeLines), '有效代码规模') +
-        metricCard('注释行', numberFormat(stats.totals.commentLines), '单行与块注释') +
-        metricCard('空行', numberFormat(stats.totals.blankLines), '格式与分段空白') +
-        metricCard('代码体积', bytesFormat(stats.totals.bytes), '按 UTF-8 统计') +
+        metricCard('注释密度', percent(stats.insights.commentRatio, 1), '注释行 / 代码行') +
+        metricCard('平均代码行', numberFormat(Math.round(stats.insights.averageCodeLinesPerFile)), '每个文件的平均代码行') +
+        metricCard('待办总数', numberFormat(stats.insights.totalTodoCount), 'TODO / FIXME / HACK') +
+        metricCard('待办密度', densityFormat(stats.insights.todoDensity), '每千行代码的待办数') +
+        metricCard('主力语言', stats.insights.topLanguage, percent(stats.insights.topLanguageShare, 1) + ' 代码占比') +
+        metricCard('核心模块', stats.insights.topDirectory, '当前代码量最高的模块') +
       '</section>' +
       '<section class="grid">' +
         '<div class="panel">' +
           '<h2>语言代码量排行</h2>' +
           '<div class="section-note">按有效代码行数倒序，快速判断主要技术栈。</div>' +
-          '<div class="bars">' + renderLanguageBars(stats.languages) + '</div>' +
+          '<div class="bars">' + renderBarList(stats.languages.slice(0, presentation.compact ? 6 : 8), 'codeLines', (value) => numberFormat(value) + ' 行', '暂无语言数据') + '</div>' +
         '</div>' +
         '<div class="panel">' +
           '<h2>代码组成</h2>' +
-          '<div class="section-note">快速区分有效代码、注释与空白占比。</div>' +
+          '<div class="section-note">区分有效代码、注释与空白占比。</div>' +
           renderComposition() +
+        '</div>' +
+      '</section>' +
+      '<section class="grid">' +
+        '<div class="panel">' +
+          '<h2>模块代码量排行</h2>' +
+          '<div class="section-note">按目录聚合，帮助你从模块视角审视项目结构。</div>' +
+          '<div class="bars">' + renderBarList(stats.directories.slice(0, presentation.compact ? 6 : 8), 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无模块数据') + '</div>' +
+        '</div>' +
+        '<div class="panel">' +
+          '<h2>待办摘要</h2>' +
+          '<div class="section-note">仅统计注释中的 TODO / FIXME / HACK 标记。</div>' +
+          renderTodoSummary(stats.todoSummary) +
         '</div>' +
       '</section>' +
       '<section class="panel">' +
@@ -379,19 +462,25 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
         renderGitStats() +
       '</section>' +
       '<section class="panel">' +
+        '<h2>待办热点文件</h2>' +
+        '<div class="section-note">点击文件名可直接打开源码定位待办。</div>' +
+        renderTodoHotspots(stats.todoHotspots) +
+      '</section>' +
+      '<section class="panel">' +
         '<h2>语言统计明细</h2>' +
         '<div class="table-wrap">' +
           '<table>' +
-            '<thead><tr><th>语言</th><th>文件数</th><th>总行数</th><th>代码行</th><th>体积</th></tr></thead>' +
+            '<thead><tr><th>语言</th><th>文件数</th><th>代码行</th><th>体积</th><th>待办数</th></tr></thead>' +
             '<tbody>' + renderLanguageTable(stats.languages) + '</tbody>' +
           '</table>' +
         '</div>' +
       '</section>' +
       '<section class="panel">' +
         '<h2>最大文件排行</h2>' +
+        '<div class="section-note">点击文件名可直接打开源码。</div>' +
         '<div class="table-wrap">' +
           '<table>' +
-            '<thead><tr><th>文件</th><th>语言</th><th>总行数</th><th>代码行</th><th>体积</th></tr></thead>' +
+            '<thead><tr><th>文件</th><th>语言</th><th>总行数</th><th>代码行</th><th>待办数</th></tr></thead>' +
             '<tbody>' + renderLargestFiles(stats.largestFiles) + '</tbody>' +
           '</table>' +
         '</div>' +
@@ -402,7 +491,11 @@ export function getDashboardHtml(webview: vscode.Webview, stats: WorkspaceStats,
       if (!element) {
         return;
       }
-      vscode.postMessage({ command: element.getAttribute('data-command') });
+
+      vscode.postMessage({
+        command: element.getAttribute('data-command'),
+        resource: element.getAttribute('data-resource') || undefined
+      });
     });
   </script>
 </body>

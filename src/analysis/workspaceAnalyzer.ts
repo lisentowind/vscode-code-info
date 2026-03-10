@@ -1,11 +1,30 @@
+import { availableParallelism } from 'node:os';
 import * as vscode from 'vscode';
-import { BLOCK_COMMENT_TOKENS, COMMENT_PREFIXES, DEFAULT_EXCLUDES, STRING_DELIMITERS } from '../constants';
-import { getAnalysisDirectoriesSetting } from '../config/settings';
-import { parseAnalysisDirectories } from './scope';
+import { BINARY_EXTENSIONS, DEFAULT_EXCLUDES } from '../constants';
+import { getAnalysisDirectoriesSetting, getAnalysisModuleDepthSetting } from '../config/settings';
 import { analyzeGitHistory } from '../git/history';
-import type { FileStat, LanguageSummary, Logger, WorkspaceStats, WorkspaceTotals } from '../types';
+import type { FileStat, Logger, WorkspaceStats } from '../types';
+import { detectLanguage } from './languageDetector';
+import { countTextMetrics } from './lineMetrics';
+import { parseAnalysisDirectories } from './scope';
+import {
+  buildDirectorySummaries,
+  buildLanguageSummaries,
+  buildTodoHotspots,
+  buildTodoSummary,
+  buildWorkspaceInsights,
+  buildWorkspaceTotals
+} from './summaries';
+
+const textDecoder = new TextDecoder('utf-8');
+
+type FileAnalysisResult =
+  | { kind: 'file'; file: FileStat }
+  | { kind: 'skipped-binary-content' }
+  | { kind: 'skipped-unreadable' };
 
 export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats> {
+  const startTime = Date.now();
   const folders = vscode.workspace.workspaceFolders;
 
   if (!folders || folders.length === 0) {
@@ -14,53 +33,42 @@ export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats>
 
   const { uris, gitRoot, scopeSummary } = await findWorkspaceFilesForAnalysis(folders, logger);
   const textUris = uris.filter((uri) => !isBinaryLike(uri));
-  const fileStats = await analyzeFiles(textUris, 16);
-  const languageMap = new Map<string, LanguageSummary>();
+  const initialBinarySkips = uris.length - textUris.length;
+  const { fileStats, skippedBinaryContent, skippedUnreadableFiles } = await analyzeFiles(textUris);
 
-  for (const file of fileStats) {
-    const current = languageMap.get(file.language) ?? {
-      language: file.language,
-      files: 0,
-      lines: 0,
-      codeLines: 0,
-      commentLines: 0,
-      blankLines: 0,
-      bytes: 0
-    };
-
-    current.files += 1;
-    current.lines += file.lines;
-    current.codeLines += file.codeLines;
-    current.commentLines += file.commentLines;
-    current.blankLines += file.blankLines;
-    current.bytes += file.bytes;
-    languageMap.set(file.language, current);
-  }
-
-  const totals = fileStats.reduce<WorkspaceTotals>(
-    (accumulator, file) => {
-      accumulator.files += 1;
-      accumulator.lines += file.lines;
-      accumulator.codeLines += file.codeLines;
-      accumulator.commentLines += file.commentLines;
-      accumulator.blankLines += file.blankLines;
-      accumulator.bytes += file.bytes;
-      return accumulator;
-    },
-    { files: 0, lines: 0, codeLines: 0, commentLines: 0, blankLines: 0, bytes: 0 }
-  );
-
+  const totals = buildWorkspaceTotals(fileStats);
+  const languages = buildLanguageSummaries(fileStats);
+  const moduleDepth = getAnalysisModuleDepthSetting();
+  const directories = buildDirectorySummaries(fileStats, folders.map((folder) => folder.name), moduleDepth);
+  const todoSummary = buildTodoSummary(fileStats);
+  const todoHotspots = buildTodoHotspots(fileStats);
+  const insights = buildWorkspaceInsights(totals, languages, directories, todoSummary);
   const git = await analyzeGitHistory(gitRoot);
+  const durationMs = Date.now() - startTime;
 
-  logger?.appendLine(`Analysis done: ${scopeSummary} (files: ${fileStats.length})`);
+  logger?.appendLine(
+    `Analysis done: ${scopeSummary} (matched: ${uris.length}, analyzed: ${fileStats.length}, duration: ${durationMs}ms)`
+  );
 
   return {
     workspaceName: folders.length === 1 ? folders[0].name : 'Multi-root Workspace',
     generatedAt: new Date().toLocaleString(),
     totals,
-    languages: [...languageMap.values()].sort((left, right) => right.codeLines - left.codeLines),
+    languages,
+    directories,
     largestFiles: [...fileStats].sort((left, right) => right.lines - left.lines).slice(0, 10),
     files: [...fileStats].sort((left, right) => right.codeLines - left.codeLines),
+    todoSummary,
+    todoHotspots,
+    insights,
+    analysisMeta: {
+      durationMs,
+      matchedFiles: uris.length,
+      analyzedFiles: fileStats.length,
+      skippedBinaryFiles: initialBinarySkips + skippedBinaryContent,
+      skippedUnreadableFiles,
+      scopeSummary
+    },
     git
   };
 }
@@ -82,19 +90,19 @@ async function findWorkspaceFilesForAnalysis(
   const consideredRoots: string[] = [];
 
   for (const folder of folders) {
-    const dirs = [
+    const directories = [
       ...parsed.globalDirectories,
       ...(parsed.scopedDirectories.get(folder.name) ?? [])
     ];
 
-    if (dirs.length === 0) {
+    if (directories.length === 0) {
       continue;
     }
 
     consideredRoots.push(folder.uri.fsPath);
 
-    for (const dir of dirs) {
-      const pattern = `${dir.replace(/\\/g, '/').replace(/\/+$/, '')}/**/*`;
+    for (const directory of directories) {
+      const pattern = `${directory.replace(/\\/g, '/').replace(/\/+$/, '')}/**/*`;
       requests.push(vscode.workspace.findFiles(new vscode.RelativePattern(folder, pattern), DEFAULT_EXCLUDES));
     }
   }
@@ -115,294 +123,82 @@ async function findWorkspaceFilesForAnalysis(
 
   const uris = [...seen.values()];
   const gitRoot = consideredRoots[0] ?? folders[0].uri.fsPath;
-  const summary = configured.join(', ');
+  const scopeSummary = configured.join(', ');
 
-  logger?.appendLine(`Analysis scope: ${summary} (files: ${uris.length})`);
-  return { uris, gitRoot, scopeSummary: summary };
+  logger?.appendLine(`Analysis scope: ${scopeSummary} (files: ${uris.length})`);
+  return { uris, gitRoot, scopeSummary };
 }
 
-async function analyzeFiles(uris: vscode.Uri[], concurrency: number): Promise<FileStat[]> {
-  const results: FileStat[] = [];
+async function analyzeFiles(
+  uris: vscode.Uri[]
+): Promise<{ fileStats: FileStat[]; skippedBinaryContent: number; skippedUnreadableFiles: number }> {
+  const fileStats: FileStat[] = [];
+  let skippedBinaryContent = 0;
+  let skippedUnreadableFiles = 0;
   let currentIndex = 0;
+  const workerCount = Math.min(Math.max(getWorkerCount(), 1), Math.max(uris.length, 1));
 
-  const workers = Array.from({ length: Math.min(concurrency, Math.max(uris.length, 1)) }, async () => {
+  const workers = Array.from({ length: workerCount }, async () => {
     while (currentIndex < uris.length) {
       const index = currentIndex;
       currentIndex += 1;
-      const stat = await analyzeFile(uris[index]);
-      if (stat) {
-        results.push(stat);
+
+      const result = await analyzeFile(uris[index]);
+      switch (result.kind) {
+        case 'file':
+          fileStats.push(result.file);
+          break;
+        case 'skipped-binary-content':
+          skippedBinaryContent += 1;
+          break;
+        case 'skipped-unreadable':
+          skippedUnreadableFiles += 1;
+          break;
       }
     }
   });
 
   await Promise.all(workers);
-  return results;
+  return { fileStats, skippedBinaryContent, skippedUnreadableFiles };
 }
 
-async function analyzeFile(uri: vscode.Uri): Promise<FileStat | undefined> {
+async function analyzeFile(uri: vscode.Uri): Promise<FileAnalysisResult> {
   try {
     const bytes = await vscode.workspace.fs.readFile(uri);
-    const text = Buffer.from(bytes).toString('utf8');
-
-    if (text.includes('\u0000')) {
-      return undefined;
+    if (bytes.includes(0)) {
+      return { kind: 'skipped-binary-content' };
     }
 
     const language = detectLanguage(uri);
-    const counters = countLines(text, language);
+    const text = textDecoder.decode(bytes);
+    const metrics = countTextMetrics(text, language);
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
     const path = workspaceFolder ? vscode.workspace.asRelativePath(uri, false) : uri.fsPath;
 
     return {
-      path,
-      language,
-      lines: counters.lines,
-      codeLines: counters.codeLines,
-      commentLines: counters.commentLines,
-      blankLines: counters.blankLines,
-      bytes: bytes.byteLength
+      kind: 'file',
+      file: {
+        resource: uri.toString(),
+        path,
+        language,
+        lines: metrics.lines,
+        codeLines: metrics.codeLines,
+        commentLines: metrics.commentLines,
+        blankLines: metrics.blankLines,
+        bytes: bytes.byteLength,
+        todoCounts: metrics.todoCounts
+      }
     };
   } catch {
-    return undefined;
+    return { kind: 'skipped-unreadable' };
   }
 }
 
-function detectLanguage(uri: vscode.Uri): string {
-  const filename = uri.path.split('/').pop() ?? '';
-  const extension = filename.includes('.') ? filename.split('.').pop()?.toLowerCase() ?? '' : '';
-  const map: Record<string, string> = {
-    ts: 'typescript',
-    tsx: 'typescriptreact',
-    js: 'javascript',
-    jsx: 'javascriptreact',
-    py: 'python',
-    java: 'java',
-    go: 'go',
-    rs: 'rust',
-    c: 'c',
-    h: 'c',
-    cc: 'cpp',
-    cpp: 'cpp',
-    hpp: 'cpp',
-    cs: 'csharp',
-    php: 'php',
-    rb: 'ruby',
-    sh: 'shellscript',
-    zsh: 'shellscript',
-    bash: 'shellscript',
-    yml: 'yaml',
-    yaml: 'yaml',
-    json: 'json',
-    html: 'html',
-    htm: 'html',
-    css: 'css',
-    scss: 'scss',
-    less: 'less',
-    md: 'markdown',
-    xml: 'xml',
-    sql: 'sql',
-    kt: 'kotlin',
-    swift: 'swift',
-    dart: 'dart',
-    vue: 'vue',
-    svelte: 'svelte',
-    lua: 'lua',
-    r: 'r',
-    ps1: 'powershell'
-  };
-
-  if (filename === 'Dockerfile') {
-    return 'dockerfile';
-  }
-
-  if (filename === 'Makefile') {
-    return 'makefile';
-  }
-
-  return map[extension] ?? (extension || 'plaintext');
-}
-
-function countLines(text: string, language: string): Omit<FileStat, 'path' | 'language' | 'bytes'> {
-  const lines = text.split(/\r?\n/);
-  const lineCommentPrefixes = [...(COMMENT_PREFIXES[language] ?? [])].sort((left, right) => right.length - left.length);
-  const blockTokens = [...(BLOCK_COMMENT_TOKENS[language] ?? [])].sort((left, right) => right.start.length - left.start.length);
-  const stringDelimiters = [...(STRING_DELIMITERS[language] ?? ['"', "'"])].sort((left, right) => right.length - left.length);
-
-  let codeLines = 0;
-  let commentLines = 0;
-  let blankLines = 0;
-
-  let activeBlock: { start: string; end: string } | undefined;
-  let activeString: { delimiter: string } | undefined;
-
-  for (const rawLine of lines) {
-    const trimmed = rawLine.trim();
-
-    if (trimmed.length === 0) {
-      blankLines += 1;
-      continue;
-    }
-
-    let hasCode = false;
-    let hasComment = false;
-    let index = 0;
-
-    while (index < rawLine.length) {
-      if (activeBlock) {
-        hasComment = true;
-        const endIndex = rawLine.indexOf(activeBlock.end, index);
-        if (endIndex === -1) {
-          index = rawLine.length;
-          break;
-        }
-        index = endIndex + activeBlock.end.length;
-        activeBlock = undefined;
-        continue;
-      }
-
-      if (activeString) {
-        hasCode = true;
-        const endIndex = findStringEnd(rawLine, index, activeString.delimiter);
-        if (endIndex === -1) {
-          index = rawLine.length;
-          break;
-        }
-        index = endIndex + activeString.delimiter.length;
-        activeString = undefined;
-        continue;
-      }
-
-      const ch = rawLine[index];
-      if (ch === ' ' || ch === '\t') {
-        index += 1;
-        continue;
-      }
-
-      const blockStart = matchBlockStartAt(rawLine, index, blockTokens);
-      if (blockStart) {
-        hasComment = true;
-        const endIndex = rawLine.indexOf(blockStart.end, index + blockStart.start.length);
-        if (endIndex === -1) {
-          activeBlock = blockStart;
-          break;
-        }
-
-        index = endIndex + blockStart.end.length;
-        continue;
-      }
-
-      const lineComment = matchTokenAt(rawLine, index, lineCommentPrefixes);
-      if (lineComment) {
-        hasComment = true;
-        break;
-      }
-
-      const stringDelimiter = matchTokenAt(rawLine, index, stringDelimiters);
-      if (stringDelimiter) {
-        hasCode = true;
-        activeString = { delimiter: stringDelimiter };
-        index += stringDelimiter.length;
-        continue;
-      }
-
-      hasCode = true;
-      index += 1;
-    }
-
-    if (hasCode) {
-      codeLines += 1;
-      continue;
-    }
-
-    if (hasComment) {
-      commentLines += 1;
-      continue;
-    }
-
-    codeLines += 1;
-  }
-
-  return {
-    lines: lines.length,
-    codeLines,
-    commentLines,
-    blankLines
-  };
-}
-
-function matchTokenAt(line: string, index: number, tokens: string[]): string | undefined {
-  for (const token of tokens) {
-    if (line.startsWith(token, index)) {
-      return token;
-    }
-  }
-  return undefined;
-}
-
-function matchBlockStartAt(
-  line: string,
-  index: number,
-  tokens: { start: string; end: string }[]
-): { start: string; end: string } | undefined {
-  for (const token of tokens) {
-    if (line.startsWith(token.start, index)) {
-      return token;
-    }
-  }
-  return undefined;
-}
-
-function findStringEnd(line: string, fromIndex: number, delimiter: string): number {
-  if (delimiter.length > 1) {
-    return line.indexOf(delimiter, fromIndex);
-  }
-
-  let index = fromIndex;
-  while (index < line.length) {
-    const ch = line[index];
-    if (ch === '\\') {
-      index += 2;
-      continue;
-    }
-
-    if (line.startsWith(delimiter, index)) {
-      return index;
-    }
-
-    index += 1;
-  }
-
-  return -1;
+function getWorkerCount(): number {
+  return Math.min(24, Math.max(8, availableParallelism() * 2));
 }
 
 function isBinaryLike(uri: vscode.Uri): boolean {
   const extension = uri.path.split('.').pop()?.toLowerCase() ?? '';
-  return new Set([
-    'png',
-    'jpg',
-    'jpeg',
-    'gif',
-    'webp',
-    'ico',
-    'pdf',
-    'zip',
-    'gz',
-    'tar',
-    'jar',
-    'class',
-    'exe',
-    'dll',
-    'so',
-    'dylib',
-    'mp3',
-    'mp4',
-    'mov',
-    'avi',
-    'woff',
-    'woff2',
-    'ttf',
-    'eot',
-    'lock'
-  ]).has(extension);
+  return BINARY_EXTENSIONS.has(extension);
 }
