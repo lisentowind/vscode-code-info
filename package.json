@@ -2,7 +2,7 @@
   "name": "code-info",
   "displayName": "code-info",
   "description": "查看当前项目代码详情",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "icon": "resources/icon.png",
   "publisher": "tingfeng",
   "repository": {

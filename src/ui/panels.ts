@@ -26,7 +26,8 @@ export function showStatsPanel(
   state: DashboardPanelState,
   data: DashboardData,
   onCommand: (message?: WebviewCommandMessage) => void | Promise<void>,
-  onVisible?: () => void | Promise<void>
+  onVisible?: () => void | Promise<void>,
+  extensionUri?: vscode.Uri
 ): void {
   const workspaceName = data.projectStats?.workspaceName ?? data.todayStats?.workspaceName ?? 'Dashboard';
   if (!state.panel) {
@@ -34,6 +35,7 @@ export function showStatsPanel(
       enableScripts: true,
       retainContextWhenHidden: true
     });
+    applyPanelIcon(state.panel, extensionUri);
 
     state.panel.onDidDispose(() => {
       state.panel = undefined;
@@ -50,6 +52,7 @@ export function showStatsPanel(
   }
 
   state.panel.title = `Code Info · ${workspaceName}`;
+  applyPanelIcon(state.panel, extensionUri);
   renderPanel(state.panel, data);
   state.panel.reveal(vscode.ViewColumn.One, false);
 }
@@ -57,13 +60,15 @@ export function showStatsPanel(
 export function showDashboardEmptyPanel(
   state: DashboardPanelState,
   onCommand: (message?: WebviewCommandMessage) => void | Promise<void>,
-  onVisible?: () => void | Promise<void>
+  onVisible?: () => void | Promise<void>,
+  extensionUri?: vscode.Uri
 ): void {
   if (!state.panel) {
     state.panel = vscode.window.createWebviewPanel('codeInfoStats', 'Code Info · Dashboard', vscode.ViewColumn.One, {
       enableScripts: true,
       retainContextWhenHidden: true
     });
+    applyPanelIcon(state.panel, extensionUri);
 
     state.panel.onDidDispose(() => {
       state.panel = undefined;
@@ -80,6 +85,7 @@ export function showDashboardEmptyPanel(
   }
 
   state.panel.title = 'Code Info · Dashboard';
+  applyPanelIcon(state.panel, extensionUri);
   state.panel.webview.html = getEmptyStateHtml(state.panel.webview, false, { showOpenPanel: false });
   state.panel.reveal(vscode.ViewColumn.One, false);
 }
@@ -100,4 +106,13 @@ function renderPanel(panel: vscode.WebviewPanel, data: DashboardData): void {
   };
 
   panel.webview.html = getDashboardHtml(panel.webview, data, presentation);
+}
+
+function applyPanelIcon(panel: vscode.WebviewPanel, extensionUri?: vscode.Uri): void {
+  if (!extensionUri) {
+    return;
+  }
+
+  const icon = vscode.Uri.joinPath(extensionUri, 'resources', 'icon.png');
+  panel.iconPath = { light: icon, dark: icon };
 }

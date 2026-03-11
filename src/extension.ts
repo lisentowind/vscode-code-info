@@ -39,7 +39,7 @@ export function activate(context: vscode.ExtensionContext): void {
         await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
       }
       if (stats || latestTodayStats) {
-        showStatsPanel(dashboardPanelState, getDashboardData(), handleWebviewCommand, refreshToday);
+        showStatsPanel(dashboardPanelState, getDashboardData(), handleWebviewCommand, refreshToday, context.extensionUri);
       }
     }),
     vscode.commands.registerCommand('codeInfo.selectAnalysisDirectories', async () => {
@@ -55,11 +55,11 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       if (latestProjectStats || latestTodayStats) {
-        showStatsPanel(dashboardPanelState, getDashboardData(), handleWebviewCommand, refreshToday);
+        showStatsPanel(dashboardPanelState, getDashboardData(), handleWebviewCommand, refreshToday, context.extensionUri);
         return;
       }
 
-      showDashboardEmptyPanel(dashboardPanelState, handleWebviewCommand, refreshToday);
+      showDashboardEmptyPanel(dashboardPanelState, handleWebviewCommand, refreshToday, context.extensionUri);
     }),
     vscode.commands.registerCommand('codeInfo.refreshStats', async () => {
       await analyzeAndSync(sidebarProvider, { revealPanel: false });

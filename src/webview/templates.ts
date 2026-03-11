@@ -320,6 +320,12 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
     details.tree-node > summary { cursor: pointer; list-style: none; }
     details.tree-node > summary::-webkit-details-marker { display: none; }
     .tree-children { margin-top: 10px; padding-left: 12px; display: grid; gap: 10px; border-left: 1px dashed color-mix(in srgb, var(--border) 70%, transparent); }
+    .tree-files { margin-top: 10px; display: grid; gap: 8px; }
+    .tree-files-title { font-size: 12px; color: var(--muted); display:flex; justify-content: space-between; gap: 10px; }
+    .tree-file-row { display:flex; align-items:center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--border-soft) 75%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--panel) 92%, transparent); }
+    .tree-file-row .file-entry { min-width: 0; }
+    .tree-file-row .link-button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tree-more { padding-left: 4px; }
     body.compact .page { gap: 12px; }
     body.compact .hero { flex-direction: column; padding: 14px; }
     body.compact .grid, body.compact .git-grid { grid-template-columns: 1fr; }
@@ -450,8 +456,9 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
       const meta = getFileIconMeta(language, path);
       return '<span class="file-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" style="color:' + meta.color + '"><path d="M4 2.5h5l3 3v8H4z" fill="color-mix(in srgb, currentColor 12%, transparent)" stroke="currentColor" stroke-width="1.1"/><path d="M9 2.5v3h3" stroke="currentColor" stroke-width="1.1"/><text x="8" y="12" text-anchor="middle" font-size="4.1" font-family="var(--vscode-editor-font-family), var(--vscode-font-family)" fill="currentColor">' + escapeHtml(meta.label) + '</text></svg></span>';
     }
-    function fileButton(path, resource) {
-      return '<button class="link-button" title="' + escapeHtml(path) + '" data-command="openFile" data-resource="' + escapeHtml(resource) + '">' + escapeHtml(path) + '</button>';
+    function fileButton(label, resource, title) {
+      const resolvedTitle = title || label;
+      return '<button class="link-button" title="' + escapeHtml(resolvedTitle) + '" data-command="openFile" data-resource="' + escapeHtml(resource) + '">' + escapeHtml(label) + '</button>';
     }
     function renderBarList(items, labelKey, valueKey, formatter, emptyText) {
       if (!items || !items.length) return '<div class="empty-note">' + escapeHtml(emptyText) + '</div>';
@@ -514,17 +521,59 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
         items.slice(0, presentation.compact ? 5 : 10).map((file) => '<tr><td class="mono"><div class="file-entry">' + fileTypeIcon(file.language, file.path) + fileButton(file.path, file.resource) + '</div></td><td>' + escapeHtml(file.language) + '</td><td>' + numberFormat(file.total) + '</td><td>' + numberFormat(file.todo) + '</td><td>' + numberFormat(file.fixme) + '</td><td>' + numberFormat(file.hack) + '</td></tr>').join('') +
       '</tbody></table></div>';
     }
+    function normalizePath(value) {
+      return String(value || '').replace(/\\\\/g, '/');
+    }
+    function buildDirectFileIndex(files) {
+      const index = new Map();
+      if (!files || !files.length) return index;
+      for (const file of files) {
+        const filePath = normalizePath(file.path);
+        const parts = filePath.split('/').filter(Boolean);
+        const dir = parts.length <= 1 ? '(root)' : parts.slice(0, -1).join('/');
+        const list = index.get(dir) || [];
+        list.push(file);
+        index.set(dir, list);
+      }
+      return index;
+    }
+    const directFilesByDir = buildDirectFileIndex(projectStats?.files || []);
+    function getDirectFilesUnder(directoryPath) {
+      const target = normalizePath(directoryPath);
+      return directFilesByDir.get(target) || [];
+    }
+    function renderTreeFiles(directoryPath, depth) {
+      const files = getDirectFilesUnder(directoryPath);
+      if (!files.length) return '';
+
+      const maxFiles = presentation.compact ? 4 : (depth <= 1 ? 14 : 10);
+      const shown = files.slice(0, maxFiles);
+      const remaining = Math.max(files.length - shown.length, 0);
+      const rows = shown.map((file) => {
+        const name = normalizePath(file.path).split('/').pop() || file.path;
+        return '<div class="tree-file-row"><div class="file-entry">' +
+          fileTypeIcon(file.language, file.path) + fileButton(name, file.resource, file.path) +
+        '</div><span class="muted">' + numberFormat(file.codeLines) + ' 行</span></div>';
+      }).join('');
+      const moreText = remaining > 0 ? '<div class="muted tree-more">… 还有 ' + numberFormat(remaining) + ' 个文件</div>' : '';
+      return '<div class="tree-files"><div class="tree-files-title"><span>文件（当前目录）</span><span>' + numberFormat(files.length) + '</span></div>' + rows + moreText + '</div>';
+    }
     function renderTreeNodes(nodes, depth) {
       if (!nodes || !nodes.length) return '<div class="empty-note">暂无目录树数据。</div>';
-      const maxItems = depth === 0 ? (presentation.compact ? 5 : 8) : 6;
-      return '<div class="tree-list">' + nodes.slice(0, maxItems).map((node) => {
+      const maxItems = depth === 0 ? (presentation.compact ? 6 : 14) : (presentation.compact ? 8 : 20);
+      const shown = nodes.slice(0, maxItems);
+      const remaining = Math.max(nodes.length - shown.length, 0);
+      const moreHint = remaining > 0 ? '<div class="muted tree-more">… 还有 ' + numberFormat(remaining) + ' 个子目录</div>' : '';
+      return '<div class="tree-list">' + shown.map((node) => {
         const children = node.children && node.children.length ? '<div class="tree-children">' + renderTreeNodes(node.children, depth + 1) + '</div>' : '';
+        const files = renderTreeFiles(node.path, depth);
         const content = '<div class="tree-summary"><span>' + escapeHtml(node.path) + '</span><span class="muted">' + numberFormat(node.codeLines) + ' 行 · ' + numberFormat(node.files) + ' 文件</span></div>';
-        if (!node.children || !node.children.length || depth >= 2) {
+        const hasDetails = (node.children && node.children.length) || files;
+        if (!hasDetails) {
           return '<div class="card">' + content + '</div>';
         }
-        return '<details class="tree-node" ' + (depth === 0 ? 'open' : '') + '><summary>' + content + '</summary>' + children + '</details>';
-      }).join('') + '</div>';
+        return '<details class="tree-node" ' + (depth === 0 ? 'open' : '') + '><summary>' + content + '</summary>' + children + files + '</details>';
+      }).join('') + moreHint + '</div>';
     }
 
     const workspaceName = projectStats?.workspaceName || todayStats?.workspaceName || '当前工作区';
@@ -602,7 +651,7 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
           '<div class="panel"><div class="section-title">' + icon('module') + '<h2>模块代码量排行</h2></div><div class="section-note">按目录深度聚合，可配合 codeInfo.analysis.moduleDepth 调整。</div><div class="bars">' + renderBarList(projectStats.directories.slice(0, presentation.compact ? 6 : 8), 'path', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无模块数据') + '</div></div>' +
           '<div class="panel"><div class="section-title">' + icon('todo') + '<h2>待办摘要</h2></div><div class="section-note">仅统计注释中的 TODO / FIXME / HACK 标记。</div>' + renderTodoSummary(projectStats.todoSummary) + '</div>' +
         '</section>' +
-        '<section class="panel"><div class="section-title">' + icon('tree') + '<h2>模块目录树</h2></div><div class="section-note">新增目录树展开视图，帮助你在层级结构中定位代码量集中区域。</div>' + renderTreeNodes(projectStats.directoryTree, 0) + '</section>' +
+        '<section class="panel"><div class="section-title">' + icon('tree') + '<h2>模块目录树</h2></div><div class="section-note">支持逐层展开到最深目录，并展示当前目录下的文件（点击文件名可打开）。</div>' + renderTreeNodes(projectStats.directoryTree, 0) + '</section>' +
         '<section class="panel"><div class="section-title">' + icon('git') + '<h2>Git 提交趋势</h2></div><div class="section-note">基于当前工作区首个目录的 Git 历史。</div>' + renderGitStats(projectStats) + '</section>' +
         '<section class="panel"><div class="section-title">' + icon('todo') + '<h2>待办热点文件</h2></div><div class="section-note">点击文件名可直接打开源码定位待办。</div>' + renderTodoHotspots(projectStats.todoHotspots) + '</section>' +
         '<section class="panel"><div class="section-title">' + icon('language') + '<h2>语言统计明细</h2></div><div class="table-wrap"><table><thead><tr><th>语言</th><th>文件数</th><th>代码行</th><th>体积</th><th>待办数</th></tr></thead><tbody>' + renderLanguageTable(projectStats.languages) + '</tbody></table></div></section>' +
