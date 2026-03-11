@@ -34,7 +34,7 @@ export class CodeInfoStatusBarController implements vscode.Disposable {
       return;
     }
 
-    this.item.text = this.loading ? '$(sync~spin)' : '$(graph)';
+    this.item.text = this.loading ? '$(sync~spin) 今' : createStatusBarText(this.todayStats);
     this.item.tooltip = this.loading ? createLoadingTooltip() : createTooltip(this.todayStats);
     this.item.show();
   }
@@ -43,7 +43,7 @@ export class CodeInfoStatusBarController implements vscode.Disposable {
 function createLoadingTooltip(): vscode.MarkdownString {
   const tooltip = new vscode.MarkdownString(undefined, true);
   tooltip.supportThemeIcons = true;
-  tooltip.appendMarkdown('$(sync~spin) **今日统计加载中**  \n正在刷新今天新增和修改过的文件。  \n\n单击打开看板。');
+  tooltip.appendMarkdown('$(sync~spin) **今日统计加载中**  \n正在刷新今天有变更的文件。  \n\n单击打开看板。');
   return tooltip;
 }
 
@@ -52,28 +52,38 @@ function createTooltip(todayStats: TodayStats | undefined): vscode.MarkdownStrin
   tooltip.supportThemeIcons = true;
 
   if (!todayStats) {
-    tooltip.appendMarkdown('$(graph) **今日统计**  \n暂无数据，稍后会自动刷新。  \n\n单击打开看板。');
+    tooltip.appendMarkdown('$(graph) **今日统计**  \n今天还没有检测到变更文件。  \n\n单击打开看板。');
     return tooltip;
   }
 
+  const modifiedFiles = Math.max(todayStats.totals.touchedFiles - todayStats.totals.newFiles, 0);
   const topLanguage = todayStats.insights.topLanguage
     ? `${escapeMarkdown(todayStats.insights.topLanguage)} ${formatPercent(todayStats.insights.topLanguageShare)}`
     : '暂无';
-  const topPath = todayStats.insights.topPath ? trimText(todayStats.insights.topPath, 28) : '整个工作区';
+  const latestFile = todayStats.insights.topPath ? trimText(todayStats.insights.topPath, 28) : '暂无';
   const updatedAt = formatTime(todayStats.generatedAt);
 
   tooltip.appendMarkdown(
     [
       '$(graph) **今日统计**',
-      `触达 **${todayStats.totals.touchedFiles}** 个，新增 **${todayStats.totals.newFiles}** 个，代码 **${todayStats.totals.codeLines}** 行`,
-      `待办 **${todayStats.totals.todoCount}** 个，主语言 ${topLanguage}`,
-      `热点目录：${escapeMarkdown(topPath)}，更新 ${escapeMarkdown(updatedAt)}`,
+      `今日变更 **${todayStats.totals.touchedFiles}** 个文件，其中新增 **${todayStats.totals.newFiles}** 个，修改 **${modifiedFiles}** 个`,
+      `代码 **${todayStats.totals.codeLines}** 行，待办 **${todayStats.totals.todoCount}** 个，主语言 ${topLanguage}`,
+      `最近文件：${escapeMarkdown(latestFile)}，更新 ${escapeMarkdown(updatedAt)}`,
       '',
       '单击打开看板。'
     ].join('  \n')
   );
 
   return tooltip;
+}
+
+function createStatusBarText(todayStats: TodayStats | undefined): string {
+  if (!todayStats) {
+    return '$(graph) 今日 0';
+  }
+
+  const modifiedFiles = Math.max(todayStats.totals.touchedFiles - todayStats.totals.newFiles, 0);
+  return `$(graph) 改${modifiedFiles} 新${todayStats.totals.newFiles}`;
 }
 
 function formatPercent(value: number): string {
