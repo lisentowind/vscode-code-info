@@ -5,6 +5,7 @@ import { exportStatsFile } from './export/exporter';
 import { showDashboardEmptyPanel, showEmptyIfOpen, showStatsPanel, updatePanelIfOpen, type DashboardPanelState } from './ui/panels';
 import { CodeInfoSidebarProvider } from './ui/sidebar';
 import { selectAnalysisDirectories } from './ui/scopePicker';
+import { CodeInfoStatusBarController } from './ui/statusBar';
 import { handleWebviewCommand } from './ui/webviewCommands';
 import type { DashboardData, TodayStats, WorkspaceStats } from './types';
 
@@ -19,19 +20,23 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(outputChannel);
   outputChannel.appendLine(`Activated: ${new Date().toISOString()}`);
 
+  const statusBar = new CodeInfoStatusBarController();
+  context.subscriptions.push(statusBar);
+
   let sidebarProvider: CodeInfoSidebarProvider;
   const refreshToday = async (): Promise<void> => {
-    await refreshTodayAndRender(sidebarProvider, { revealPanel: false, silent: true });
+    await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
   };
   sidebarProvider = new CodeInfoSidebarProvider(handleWebviewCommand, refreshToday);
   sidebarProvider.render(getDashboardData());
+  statusBar.update(latestTodayStats);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(CodeInfoSidebarProvider.viewType, sidebarProvider),
     vscode.commands.registerCommand('codeInfo.showStats', async () => {
       const stats = await analyzeAndSync(sidebarProvider, { revealPanel: true });
       if (!latestTodayStats) {
-        await refreshTodayAndRender(sidebarProvider, { revealPanel: false, silent: true });
+        await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
       }
       if (stats || latestTodayStats) {
         showStatsPanel(dashboardPanelState, getDashboardData(), handleWebviewCommand, refreshToday);
@@ -40,13 +45,13 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('codeInfo.selectAnalysisDirectories', async () => {
       await selectAnalysisDirectories(outputChannel);
       latestProjectStats = undefined;
-      await refreshTodayAndRender(sidebarProvider, { revealPanel: false, silent: true });
+      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
       sidebarProvider.render(getDashboardData());
       showEmptyIfOpen(dashboardPanelState);
     }),
     vscode.commands.registerCommand('codeInfo.openPanel', async () => {
       if (!latestTodayStats) {
-        await refreshTodayAndRender(sidebarProvider, { revealPanel: false, silent: true });
+        await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
       }
 
       if (latestProjectStats || latestTodayStats) {
@@ -58,10 +63,10 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('codeInfo.refreshStats', async () => {
       await analyzeAndSync(sidebarProvider, { revealPanel: false });
-      await refreshTodayAndRender(sidebarProvider, { revealPanel: false, silent: true });
+      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
     }),
     vscode.commands.registerCommand('codeInfo.refreshTodayStats', async () => {
-      await refreshTodayAndRender(sidebarProvider, { revealPanel: false, silent: true });
+      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
     }),
     vscode.commands.registerCommand('codeInfo.export', async () => {
       const stats = await ensureStats(sidebarProvider);
@@ -99,9 +104,12 @@ export function activate(context: vscode.ExtensionContext): void {
       latestProjectStats = undefined;
       latestTodayStats = undefined;
       sidebarProvider.render(getDashboardData());
+      statusBar.update(latestTodayStats);
       showEmptyIfOpen(dashboardPanelState);
     })
   );
+
+  void refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
 }
 
 export function deactivate(): void { }
@@ -155,10 +163,12 @@ function getDashboardData(): DashboardData {
 
 async function refreshTodayAndRender(
   sidebarProvider: CodeInfoSidebarProvider,
+  statusBar: CodeInfoStatusBarController,
   options: { revealPanel: boolean; silent: boolean }
 ): Promise<TodayStats | undefined> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
+    statusBar.update(undefined);
     return undefined;
   }
 
@@ -166,11 +176,13 @@ async function refreshTodayAndRender(
     return refreshTodayTask;
   }
 
+  statusBar.setLoading(true);
   refreshTodayTask = (async () => {
     try {
       const stats = await analyzeTodayWorkspace(outputChannel);
       latestTodayStats = stats;
       sidebarProvider.render(getDashboardData());
+      statusBar.update(latestTodayStats);
       updatePanelIfOpen(dashboardPanelState, getDashboardData(), { reveal: options.revealPanel });
       return stats;
     } catch (error) {
@@ -180,6 +192,7 @@ async function refreshTodayAndRender(
       }
       return undefined;
     } finally {
+      statusBar.setLoading(false);
       refreshTodayTask = undefined;
     }
   })();

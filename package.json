@@ -29,55 +29,55 @@
     "commands": [
       {
         "command": "codeInfo.showStats",
-        "title": "Analyze Workspace",
-        "category": "Code Info",
-        "shortTitle": "Analyze"
+        "title": "分析工作区",
+        "category": "代码信息",
+        "shortTitle": "分析"
       },
       {
         "command": "codeInfo.selectAnalysisDirectories",
-        "title": "Select Analysis Directories",
-        "category": "Code Info",
-        "shortTitle": "Scope"
+        "title": "选择分析目录",
+        "category": "代码信息",
+        "shortTitle": "目录"
       },
       {
         "command": "codeInfo.openPanel",
-        "title": "Dashboard",
-        "category": "Code Info",
-        "shortTitle": "Dashboard"
+        "title": "打开看板",
+        "category": "代码信息",
+        "shortTitle": "看板"
       },
       {
         "command": "codeInfo.refreshStats",
-        "title": "Refresh",
-        "category": "Code Info",
-        "shortTitle": "Refresh"
+        "title": "刷新统计",
+        "category": "代码信息",
+        "shortTitle": "刷新"
       },
       {
         "command": "codeInfo.refreshTodayStats",
-        "title": "Refresh Today Stats",
-        "category": "Code Info",
-        "shortTitle": "Today"
+        "title": "刷新今日统计",
+        "category": "代码信息",
+        "shortTitle": "今日"
       },
       {
         "command": "codeInfo.export",
-        "title": "Export",
-        "category": "Code Info",
-        "shortTitle": "Export"
+        "title": "导出",
+        "category": "代码信息",
+        "shortTitle": "导出"
       },
       {
         "command": "codeInfo.exportJson",
-        "title": "Export JSON",
-        "category": "Code Info",
+        "title": "导出 JSON",
+        "category": "代码信息",
         "shortTitle": "JSON"
       },
       {
         "command": "codeInfo.exportCsv",
-        "title": "Export CSV",
-        "category": "Code Info",
+        "title": "导出 CSV",
+        "category": "代码信息",
         "shortTitle": "CSV"
       }
     ],
     "configuration": {
-      "title": "Code Info",
+      "title": "代码信息",
       "properties": {
         "codeInfo.analysis.directories": {
           "type": "array",
@@ -102,7 +102,7 @@
       "activitybar": [
         {
           "id": "codeInfo",
-          "title": "Code Info",
+          "title": "代码信息",
           "icon": "media/icon.svg"
         }
       ]
@@ -111,7 +111,7 @@
       "codeInfo": [
         {
           "id": "codeInfo.sidebar",
-          "name": "Overview",
+          "name": "概览",
           "type": "webview"
         }
       ]
