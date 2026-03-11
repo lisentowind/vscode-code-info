@@ -45,7 +45,7 @@ export class CodeInfoSidebarProvider implements vscode.WebviewViewProvider {
     const presentation: PresentationMode = {
       compact: true,
       title: 'Code Info · 今日统计',
-      subtitle: '这里只展示今日新增/修改文件；点“详情分析”打开大面板看今日 + 项目详情。'
+      subtitle: '展示今日新增/修改文件；若工作区是 Git 仓库，也会补充删除文件与增删行统计。点“详情分析”打开大面板看今日 + 项目详情。'
     };
     this.view.webview.html = getDashboardHtml(this.view.webview, data, presentation);
   }

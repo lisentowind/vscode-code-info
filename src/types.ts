@@ -115,15 +115,22 @@ export type TodayFileStat = FileStat & {
   modifiedAt: string;
 };
 
+export type TodayDeletedFile = {
+  path: string;
+};
+
 export type TodayTotals = {
   touchedFiles: number;
   newFiles: number;
+  deletedFiles: number;
   lines: number;
   codeLines: number;
   commentLines: number;
   blankLines: number;
   bytes: number;
   todoCount: number;
+  addedLines: number;
+  deletedLines: number;
 };
 
 export type TodayInsights = {
@@ -140,6 +147,7 @@ export type TodayStats = {
   languages: LanguageSummary[];
   touchedFiles: TodayFileStat[];
   newFiles: TodayFileStat[];
+  deletedFiles: TodayDeletedFile[];
   insights: TodayInsights;
   analysisMeta: AnalysisMeta;
 };
@@ -167,6 +175,8 @@ export type AnalysisMeta = {
   skippedBinaryFiles: number;
   skippedUnreadableFiles: number;
   scopeSummary: string;
+  gitAvailable?: boolean;
+  gitSince?: string;
 };
 
 export type PresentationMode = {

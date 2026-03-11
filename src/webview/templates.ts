@@ -404,6 +404,8 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
         todo: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10v8H3z"/><path d="M5 7.5h6M5 10h4"/><path d="M5.2 2.8 8 5.5l2.8-2.7"/></svg>',
         files: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5h5l2 2v9h-7z"/><path d="M9.5 2.5v2h2"/></svg>',
         newFile: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5h5l2 2v9h-7z"/><path d="M9.5 2.5v2h2M8 7v4M6 9h4"/></svg>',
+        deletedFile: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5h5l2 2v9h-7z"/><path d="M9.5 2.5v2h2"/><path d="M6.2 8.2 9.8 11.8M9.8 8.2 6.2 11.8"/></svg>',
+        diff: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h3M5.5 3v3"/><path d="M9 11.5h3"/><path d="M3 13.5h10"/></svg>',
         meta: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.2v3.4M8 10.9h.01"/></svg>',
         lines: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4.5h8M4 8h8M4 11.5h8"/></svg>',
         comment: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10v6H7l-3 2z"/></svg>',
@@ -490,6 +492,12 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
         files.slice(0, presentation.compact ? 6 : 12).map((file) => '<tr><td class="mono"><div class="file-entry">' + fileTypeIcon(file.language, file.path) + fileButton(file.path, file.resource) + '</div></td><td>' + escapeHtml(file.language) + '</td><td>' + escapeHtml(file.status === 'new' ? '新增' : '修改') + '</td><td>' + numberFormat(file.codeLines) + '</td><td>' + numberFormat(file.todoCounts.total) + '</td><td>' + escapeHtml(file.modifiedAt) + '</td></tr>').join('') +
       '</tbody></table></div>';
     }
+    function renderDeletedFiles(files, emptyText) {
+      if (!files || !files.length) return '<div class="empty-note">' + escapeHtml(emptyText) + '</div>';
+      return '<div class="table-wrap"><table><thead><tr><th>文件</th></tr></thead><tbody>' +
+        files.slice(0, presentation.compact ? 6 : 12).map((file) => '<tr><td class="mono">' + escapeHtml(file.path) + '</td></tr>').join('') +
+      '</tbody></table></div>';
+    }
     function renderLanguageTable(items) {
       return items.slice(0, presentation.compact ? 8 : 12).map((language, index) => '<tr><td><span class="dot" style="background:' + palette[index % palette.length] + '"></span> ' + escapeHtml(language.language) + '</td><td>' + numberFormat(language.files) + '</td><td>' + numberFormat(language.codeLines) + '</td><td>' + bytesFormat(language.bytes) + '</td><td>' + numberFormat(language.todoCount) + '</td></tr>').join('');
     }
@@ -523,6 +531,7 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
     const heroBadges = [];
     if (todayStats) heroBadges.push('<span class="badge">今日变更 ' + numberFormat(todayStats.totals.touchedFiles) + ' 文件</span>');
     if (todayStats) heroBadges.push('<span class="badge">今日新增 ' + numberFormat(todayStats.totals.newFiles) + ' 文件</span>');
+    if (todayStats && todayStats.totals.deletedFiles) heroBadges.push('<span class="badge">今日删除 ' + numberFormat(todayStats.totals.deletedFiles) + ' 文件</span>');
     if (projectStats) heroBadges.push('<span class="badge">项目分析 ' + numberFormat(projectStats.totals.files) + ' 文件</span>');
     if (projectStats) heroBadges.push('<span class="badge">项目耗时 ' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '</span>');
     const actionsHtml = presentation.compact
@@ -544,10 +553,12 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
 
     if (todayStats) {
       html += '' +
-        '<section class="panel"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="section-note">切到插件视图时自动更新，仅分析今天新增或修改过的文件，避免实时全量扫描。</div></section>' +
+        '<section class="panel"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="section-note">新增/修改基于文件时间戳；删除文件与增删行（如有）基于 Git 今日提交。</div></section>' +
         '<section class="cards">' +
           metricCard('今日变更文件', numberFormat(todayStats.totals.touchedFiles), '今天被修改或新增的文本文件', 'files') +
           metricCard('今日新增文件', numberFormat(todayStats.totals.newFiles), '通过文件创建时间判断的新文件', 'newFile') +
+          metricCard('今日删除文件', numberFormat(todayStats.totals.deletedFiles), '基于 Git 今日提交（如可用）', 'deletedFile') +
+          metricCard('今日代码变更', '+' + numberFormat(todayStats.totals.addedLines) + ' / -' + numberFormat(todayStats.totals.deletedLines), '基于 Git 今日提交（如可用）', 'diff') +
           metricCard('今日代码行', numberFormat(todayStats.totals.codeLines), '仅统计今日变更文件的当前代码量', 'lines') +
           metricCard('今日待办数', numberFormat(todayStats.totals.todoCount), '变更文件中的 TODO / FIXME / HACK', 'todo') +
           metricCard('主力语言', todayStats.insights.topLanguage, percent(todayStats.insights.topLanguageShare, 1) + ' 占比', 'language') +
@@ -559,11 +570,13 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
             '<div class="todo-item"><span>扫描范围</span><span class="muted">' + escapeHtml(todayStats.analysisMeta.scopeSummary) + '</span></div>' +
             '<div class="todo-item"><span>匹配文件</span><span class="muted">' + numberFormat(todayStats.analysisMeta.matchedFiles) + '</span></div>' +
             '<div class="todo-item"><span>今日变更</span><span class="muted">' + numberFormat(todayStats.analysisMeta.analyzedFiles) + '</span></div>' +
+            '<div class="todo-item"><span>Git 统计</span><span class="muted">' + (todayStats.analysisMeta.gitAvailable ? ('从 ' + escapeHtml(todayStats.analysisMeta.gitSince || '今日 00:00') + ' 起') : '不可用') + '</span></div>' +
             '<div class="todo-item"><span>耗时</span><span class="muted">' + escapeHtml(durationFormat(todayStats.analysisMeta.durationMs)) + '</span></div>' +
           '</div></div>' +
         '</section>' +
         '<section class="panel"><div class="section-title">' + icon('newFile') + '<h2>今日新增文件</h2></div><div class="section-note">今天首次创建的文件。</div>' + renderTodayFiles(todayStats.newFiles, '今天还没有检测到新增文件。') + '</section>' +
-        '<section class="panel"><div class="section-title">' + icon('files') + '<h2>今日变更文件</h2></div><div class="section-note">今天新增或修改过的文件清单，点击文件名可直接打开源码。</div>' + renderTodayFiles(todayStats.touchedFiles, '今天还没有检测到新增或修改过的文件。') + '</section>';
+        '<section class="panel"><div class="section-title">' + icon('files') + '<h2>今日变更文件</h2></div><div class="section-note">今天新增或修改过的文件清单，点击文件名可直接打开源码。</div>' + renderTodayFiles(todayStats.touchedFiles, '今天还没有检测到新增或修改过的文件。') + '</section>' +
+        '<section class="panel"><div class="section-title">' + icon('deletedFile') + '<h2>今日删除文件</h2></div><div class="section-note">' + (todayStats.analysisMeta.gitAvailable ? '基于 Git 今日提交，仅展示文件路径。' : '当前工作区没有可用的 Git 数据，无法统计删除文件。') + '</div>' + renderDeletedFiles(todayStats.deletedFiles, '今天还没有检测到删除文件。') + '</section>';
     } else {
       html += '<section class="panel"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="empty-note">当前还没有今日统计数据。切到插件时会自动刷新，也可以手动点击“刷新今日统计”。</div></section>';
     }

@@ -1,6 +1,8 @@
 import { stat } from 'node:fs/promises';
+import path from 'node:path';
 import * as vscode from 'vscode';
-import type { Logger, TodayFileStat, TodayStats } from '../types';
+import { analyzeGitTodayChanges } from '../git/today';
+import type { Logger, TodayDeletedFile, TodayFileStat, TodayStats } from '../types';
 import { analyzeTextFile } from './fileAnalyzer';
 import { findWorkspaceFilesForAnalysis, getWorkerCount, isBinaryLike } from './targets';
 import { buildLanguageSummaries } from './summaries';
@@ -17,10 +19,21 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
     throw new Error('No workspace folder found.');
   }
 
-  const { uris, scopeSummary } = await findWorkspaceFilesForAnalysis(folders, logger);
+  const { uris, gitRoot, scopeSummary } = await findWorkspaceFilesForAnalysis(folders, logger);
   const textUris = uris.filter((uri) => !isBinaryLike(uri));
   const initialBinarySkips = uris.length - textUris.length;
   const todayStart = getStartOfToday();
+  const gitSinceLabel = formatLocalSinceLabel(todayStart);
+  const gitChanges = await analyzeGitTodayChanges(gitRoot, todayStart);
+  const deletedFiles: TodayDeletedFile[] = gitChanges.available
+    ? gitChanges.deletedFiles
+      .map((filePath) => {
+        const absolutePath = path.join(gitRoot, filePath);
+        const relativePath = vscode.workspace.asRelativePath(absolutePath, false);
+        return { path: relativePath };
+      })
+      .sort((left, right) => left.path.localeCompare(right.path))
+    : [];
 
   const touchedFiles: TodayFileStat[] = [];
   let skippedUnreadableFiles = 0;
@@ -77,15 +90,30 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
       accumulator.todoCount += file.todoCounts.total;
       return accumulator;
     },
-    { touchedFiles: 0, newFiles: 0, lines: 0, codeLines: 0, commentLines: 0, blankLines: 0, bytes: 0, todoCount: 0 }
+    {
+      touchedFiles: 0,
+      newFiles: 0,
+      deletedFiles: 0,
+      lines: 0,
+      codeLines: 0,
+      commentLines: 0,
+      blankLines: 0,
+      bytes: 0,
+      todoCount: 0,
+      addedLines: 0,
+      deletedLines: 0
+    }
   );
+  totals.deletedFiles = deletedFiles.length;
+  totals.addedLines = gitChanges.addedLines;
+  totals.deletedLines = gitChanges.deletedLines;
 
   const topLanguage = languages[0];
   const topTouchedFile = sortedTouchedFiles[0];
   const durationMs = Date.now() - startTime;
 
   logger?.appendLine(
-    `Today analysis done: ${scopeSummary} (touched: ${touchedFiles.length}, duration: ${durationMs}ms)`
+    `Today analysis done: ${scopeSummary} (touched: ${touchedFiles.length}, deleted: ${deletedFiles.length}, duration: ${durationMs}ms)`
   );
 
   return {
@@ -95,6 +123,7 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
     languages,
     touchedFiles: sortedTouchedFiles.slice(0, 20),
     newFiles: newFiles.slice(0, 20),
+    deletedFiles: deletedFiles.slice(0, 20),
     insights: {
       topLanguage: topLanguage?.language ?? '—',
       topLanguageShare: totals.codeLines === 0 ? 0 : (topLanguage?.codeLines ?? 0) / totals.codeLines,
@@ -107,7 +136,9 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
       analyzedFiles: touchedFiles.length,
       skippedBinaryFiles,
       skippedUnreadableFiles,
-      scopeSummary
+      scopeSummary,
+      gitAvailable: gitChanges.available,
+      gitSince: gitSinceLabel
     }
   };
 }
@@ -137,4 +168,11 @@ function getStartOfToday(): Date {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   return now;
+}
+
+function formatLocalSinceLabel(value: Date): string {
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, '0');
+  const day = `${value.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day} 00:00`;
 }

@@ -62,12 +62,16 @@ function createTooltip(todayStats: TodayStats | undefined): vscode.MarkdownStrin
     : '暂无';
   const latestFile = todayStats.insights.topPath ? trimText(todayStats.insights.topPath, 28) : '暂无';
   const updatedAt = formatTime(todayStats.generatedAt);
+  const gitLine = todayStats.analysisMeta.gitAvailable
+    ? `Git（${escapeMarkdown(todayStats.analysisMeta.gitSince || '今日 00:00')} 起）：+${todayStats.totals.addedLines} / -${todayStats.totals.deletedLines} 行，删除 ${todayStats.totals.deletedFiles} 文件`
+    : 'Git：不可用（无法统计删行/删文件）';
 
   tooltip.appendMarkdown(
     [
       '$(graph) **今日统计**',
       `今日变更 **${todayStats.totals.touchedFiles}** 个文件，其中新增 **${todayStats.totals.newFiles}** 个，修改 **${modifiedFiles}** 个`,
       `代码 **${todayStats.totals.codeLines}** 行，待办 **${todayStats.totals.todoCount}** 个，主语言 ${topLanguage}`,
+      gitLine,
       `最近文件：${escapeMarkdown(latestFile)}，更新 ${escapeMarkdown(updatedAt)}`,
       '',
       '单击打开看板。'
@@ -83,7 +87,10 @@ function createStatusBarText(todayStats: TodayStats | undefined): string {
   }
 
   const modifiedFiles = Math.max(todayStats.totals.touchedFiles - todayStats.totals.newFiles, 0);
-  return `$(graph) 改${modifiedFiles} 新${todayStats.totals.newFiles}`;
+  const deletedFiles = todayStats.totals.deletedFiles || 0;
+  return deletedFiles > 0
+    ? `$(graph) 改${modifiedFiles} 新${todayStats.totals.newFiles} 删${deletedFiles}`
+    : `$(graph) 改${modifiedFiles} 新${todayStats.totals.newFiles}`;
 }
 
 function formatPercent(value: number): string {
