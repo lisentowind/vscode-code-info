@@ -213,7 +213,17 @@ export function getDashboardHtml(
     .metric-head .ui-icon { margin-top: 0; }
     .metric-label, .metric-value, .metric-sub { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
     .metric-label { font-size: 12px; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
-    .metric-value { font-size: 24px; font-weight: 600; line-height: 1.25; }
+    .metric-value {
+      font-size: 24px;
+      font-weight: 600;
+      line-height: 1.25;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-height: calc(1.25em * 2);
+    }
     .metric-sub { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.5; }
     .grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 16px; }
     .panel h2 { margin: 0 0 6px; font-size: 15px; }
@@ -228,13 +238,35 @@ export function getDashboardHtml(
       background: color-mix(in srgb, var(--text) 8%, transparent);
       border: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
     }
-    .bar-fill, .mini-fill {
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 72%, white 28%), var(--accent));
-      opacity: 0.92;
-      box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 16%, transparent);
-    }
+	    .bar-fill, .mini-fill {
+	      height: 100%;
+	      border-radius: inherit;
+	      background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 72%, white 28%), var(--accent));
+	      opacity: 0.92;
+	      box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 16%, transparent);
+	    }
+	    .legend-left span:nth-child(2),
+	    .author-left span:nth-child(2) {
+	      min-width: 0;
+	      overflow: hidden;
+	      text-overflow: ellipsis;
+	      white-space: nowrap;
+	      max-width: 100%;
+	    }
+	    .tree-summary {
+	      flex-wrap: nowrap;
+	    }
+	    .tree-summary > span:first-child {
+	      min-width: 0;
+	      flex: 1;
+	      overflow: hidden;
+	      text-overflow: ellipsis;
+	      white-space: nowrap;
+	    }
+	    .tree-summary > span:last-child {
+	      flex: none;
+	      white-space: nowrap;
+	    }
     .stack {
       display: flex;
       height: 14px;
