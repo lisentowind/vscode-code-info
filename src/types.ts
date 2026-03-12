@@ -28,6 +28,16 @@ export type TodoCounts = {
   hack: number;
 };
 
+export type TodoLocation = {
+  resource: string;
+  path: string;
+  language: string;
+  line: number;
+  character: number;
+  keyword: string;
+  preview: string;
+};
+
 export type DirectorySummary = {
   path: string;
   files: number;
@@ -105,6 +115,7 @@ export type WorkspaceStats = {
   files: FileStat[];
   todoSummary: TodoKeywordSummary[];
   todoHotspots: TodoHotspot[];
+  todoLocations: TodoLocation[];
   insights: WorkspaceInsights;
   analysisMeta: AnalysisMeta;
   git: GitStats;
@@ -148,6 +159,7 @@ export type TodayStats = {
   touchedFiles: TodayFileStat[];
   newFiles: TodayFileStat[];
   deletedFiles: TodayDeletedFile[];
+  todoLocations: TodoLocation[];
   insights: TodayInsights;
   analysisMeta: AnalysisMeta;
 };

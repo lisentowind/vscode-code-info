@@ -9,13 +9,17 @@ export class CodeInfoSidebarProvider implements vscode.WebviewViewProvider {
   private latest: DashboardData | undefined;
 
   public constructor(
+    private readonly extensionUri: vscode.Uri,
     private readonly onCommand: (message?: WebviewCommandMessage) => void | Promise<void>,
     private readonly onVisible?: () => void | Promise<void>
   ) { }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.view = webviewView;
-    webviewView.webview.options = { enableScripts: true };
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')]
+    };
     webviewView.webview.onDidReceiveMessage((message: WebviewCommandMessage) => {
       void this.onCommand(message);
     });

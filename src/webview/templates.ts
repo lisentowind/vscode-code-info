@@ -50,8 +50,14 @@ export function getEmptyStateHtml(
 </html>`;
 }
 
-export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, presentation: PresentationMode): string {
+export function getDashboardHtml(
+  webview: vscode.Webview,
+  data: DashboardData,
+  presentation: PresentationMode,
+  resources?: { echartsUri?: string }
+): string {
   const nonce = getNonce();
+  const echartsScript = resources?.echartsUri ? `  <script nonce="${nonce}" src="${resources.echartsUri}"></script>` : '';
   const payload = JSON.stringify({ data, presentation })
     .replace(/</g, '\\u003c')
     .replace(/\u2028/g, '\\u2028')
@@ -61,7 +67,7 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Code Info</title>
   <style>
@@ -332,6 +338,11 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
     body.compact .cards { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
     body.compact .metric-value { font-size: 22px; }
     body.compact .card, body.compact .panel { padding: 14px; }
+    .chart { display: none; width: 100%; height: 220px; margin-top: 8px; }
+    .chart-fallback { display: block; }
+    .panel.chart-ready .chart { display: block; }
+    .panel.chart-ready .chart-fallback { display: none; }
+    body.compact .chart { height: 180px; }
     @media (max-width: 960px) { .grid, .git-grid { grid-template-columns: 1fr; } .hero { flex-direction: column; } }
     @media (max-width: 320px) { .cards { grid-template-columns: 1fr; } }
   </style>
@@ -340,6 +351,7 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
   <script nonce="${nonce}" id="__codeInfoPayload" type="application/json">${payload}</script>
   <div id="app" class="page"></div>
   <pre id="error" style="display:none;white-space:pre-wrap;padding:12px;border:1px solid var(--border);border-radius:12px;"></pre>
+${echartsScript}
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const errorBox = document.getElementById('error');
@@ -460,6 +472,10 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
       const resolvedTitle = title || label;
       return '<button class="link-button" title="' + escapeHtml(resolvedTitle) + '" data-command="openFile" data-resource="' + escapeHtml(resource) + '">' + escapeHtml(label) + '</button>';
     }
+    function locationButton(label, resource, line, character, title) {
+      const resolvedTitle = title || label;
+      return '<button class="link-button" title="' + escapeHtml(resolvedTitle) + '" data-command="openLocation" data-resource="' + escapeHtml(resource) + '" data-line="' + escapeHtml(line) + '" data-character="' + escapeHtml(character) + '">' + escapeHtml(label) + '</button>';
+    }
     function renderBarList(items, labelKey, valueKey, formatter, emptyText) {
       if (!items || !items.length) return '<div class="empty-note">' + escapeHtml(emptyText) + '</div>';
       const max = items[0]?.[valueKey] ?? 1;
@@ -491,7 +507,8 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
       const authors = stats.git.topAuthors.length
         ? stats.git.topAuthors.map((item, index) => '<div class="author-item"><div class="author-left"><span class="dot" style="background:' + palette[index % palette.length] + '"></span><span>' + escapeHtml(item.name) + '</span></div><span class="muted">' + numberFormat(item.commits) + ' 次</span></div>').join('')
         : '<div class="muted">最近没有提交记录。</div>';
-      return '<div class="git-grid"><div><div class="section-note">' + escapeHtml(stats.git.rangeLabel) + ' · 共 ' + numberFormat(stats.git.totalCommits) + ' 次提交</div><div class="git-bars">' + bars + '</div></div><div><div class="section-note">贡献者 Top 5</div><div class="authors">' + authors + '</div></div></div>';
+      const commitsChart = '<div class="chart" id="chart-git-weekly"></div><div class="git-bars chart-fallback">' + bars + '</div>';
+      return '<div class="git-grid"><div><div class="section-note">' + escapeHtml(stats.git.rangeLabel) + ' · 共 ' + numberFormat(stats.git.totalCommits) + ' 次提交</div>' + commitsChart + '</div><div><div class="section-note">贡献者 Top 5</div><div class="authors">' + authors + '</div></div></div>';
     }
     function renderTodayFiles(files, emptyText) {
       if (!files || !files.length) return '<div class="empty-note">' + escapeHtml(emptyText) + '</div>';
@@ -519,6 +536,17 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
       if (!items.length) return '<div class="empty-note">未发现待办热点文件。</div>';
       return '<div class="table-wrap"><table><thead><tr><th>文件</th><th>语言</th><th>总数</th><th>TODO</th><th>FIXME</th><th>HACK</th></tr></thead><tbody>' +
         items.slice(0, presentation.compact ? 5 : 10).map((file) => '<tr><td class="mono"><div class="file-entry">' + fileTypeIcon(file.language, file.path) + fileButton(file.path, file.resource) + '</div></td><td>' + escapeHtml(file.language) + '</td><td>' + numberFormat(file.total) + '</td><td>' + numberFormat(file.todo) + '</td><td>' + numberFormat(file.fixme) + '</td><td>' + numberFormat(file.hack) + '</td></tr>').join('') +
+      '</tbody></table></div>';
+    }
+    function renderTodoLocations(items, emptyText) {
+      if (!items || !items.length) return '<div class="empty-note">' + escapeHtml(emptyText) + '</div>';
+      const max = presentation.compact ? 10 : 40;
+      return '<div class="table-wrap"><table><thead><tr><th>位置</th><th>标记</th><th>预览</th></tr></thead><tbody>' +
+        items.slice(0, max).map((item) => {
+          const label = item.path + ':' + item.line;
+          const title = label + (item.preview ? (' — ' + item.preview) : '');
+          return '<tr><td class="mono">' + locationButton(label, item.resource, String(item.line), String(item.character || 1), title) + '</td><td>' + escapeHtml(item.keyword) + '</td><td class="muted" title="' + escapeHtml(item.preview || '') + '">' + escapeHtml(item.preview || '') + '</td></tr>';
+        }).join('') +
       '</tbody></table></div>';
     }
     function normalizePath(value) {
@@ -572,8 +600,194 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
         if (!hasDetails) {
           return '<div class="card">' + content + '</div>';
         }
-        return '<details class="tree-node" ' + (depth === 0 ? 'open' : '') + '><summary>' + content + '</summary>' + children + files + '</details>';
+        return '<details class="tree-node"><summary>' + content + '</summary>' + children + files + '</details>';
       }).join('') + moreHint + '</div>';
+    }
+
+    function initCharts() {
+      if (typeof echarts === 'undefined') {
+        return;
+      }
+
+      const computed = getComputedStyle(document.body);
+      const textColor = computed.getPropertyValue('--text').trim() || '#e6e6e6';
+      const mutedColor = computed.getPropertyValue('--muted').trim() || '#9aa0a6';
+      const borderColor = computed.getPropertyValue('--border-soft').trim() || 'rgba(127,127,127,0.25)';
+      const panelColor = computed.getPropertyValue('--panel').trim() || '#1e1e1e';
+      const surfaceColor = computed.getPropertyValue('--surface').trim() || panelColor;
+      const tooltipBg = computed.getPropertyValue('--surface-hover').trim() || surfaceColor;
+      const accent = computed.getPropertyValue('--accent').trim() || palette[0];
+      const accentSoft = computed.getPropertyValue('--accent-soft').trim() || 'rgba(91, 143, 249, 0.16)';
+
+      const charts = [];
+      const resizeTargets = [];
+
+      function initChart(element, option) {
+        const chart = echarts.init(element, null, { renderer: 'canvas' });
+        chart.setOption(option, { notMerge: true, lazyUpdate: true });
+        charts.push(chart);
+        resizeTargets.push(element);
+        element.closest('.panel')?.classList.add('chart-ready');
+      }
+
+      function truncateLabel(value, max) {
+        const str = String(value || '');
+        if (str.length <= max) return str;
+        return str.slice(0, Math.max(max - 1, 1)) + '…';
+      }
+
+      function buildTooltip(formatter) {
+        return {
+          trigger: 'axis',
+          confine: true,
+          backgroundColor: tooltipBg,
+          borderColor: borderColor,
+          borderWidth: 1,
+          padding: [8, 10],
+          textStyle: { color: textColor, fontSize: 12 },
+          extraCssText: 'border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,0.18);backdrop-filter:saturate(120%) blur(6px);',
+          axisPointer: { type: 'shadow' },
+          formatter
+        };
+      }
+
+      const languageEl = document.getElementById('chart-language');
+      if (languageEl && projectStats && projectStats.languages && projectStats.languages.length) {
+        const items = projectStats.languages.slice(0, presentation.compact ? 6 : 8);
+        initChart(languageEl, {
+          animation: false,
+          tooltip: buildTooltip((params) => {
+            const point = Array.isArray(params) ? params[0] : params;
+            const item = items[point.dataIndex];
+            if (!item) return '';
+            return escapeHtml(item.language) + '<br/>' + numberFormat(item.codeLines) + ' 行 · ' + numberFormat(item.files) + ' 文件';
+          }),
+          grid: { left: 4, right: 10, top: 8, bottom: 4, containLabel: true },
+          xAxis: {
+            type: 'value',
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { show: false },
+            splitLine: { show: false }
+          },
+          yAxis: {
+            type: 'category',
+            data: items.map((item) => item.language),
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { color: mutedColor, formatter: (value) => truncateLabel(value, 16) }
+          },
+          series: [
+            {
+              type: 'bar',
+              data: items.map((item) => item.codeLines),
+              barWidth: 10,
+              itemStyle: { color: palette[0], borderRadius: [0, 7, 7, 0] }
+            }
+          ]
+        });
+      }
+
+      const moduleEl = document.getElementById('chart-module');
+      if (moduleEl && projectStats && projectStats.directories && projectStats.directories.length) {
+        const items = projectStats.directories.slice(0, presentation.compact ? 6 : 8);
+        initChart(moduleEl, {
+          animation: false,
+          tooltip: buildTooltip((params) => {
+            const point = Array.isArray(params) ? params[0] : params;
+            const item = items[point.dataIndex];
+            if (!item) return '';
+            return escapeHtml(item.path) + '<br/>' + numberFormat(item.codeLines) + ' 行 · ' + numberFormat(item.files) + ' 文件';
+          }),
+          grid: { left: 4, right: 10, top: 8, bottom: 4, containLabel: true },
+          xAxis: {
+            type: 'value',
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { show: false },
+            splitLine: { show: false }
+          },
+          yAxis: {
+            type: 'category',
+            data: items.map((item) => item.path),
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: {
+              color: mutedColor,
+              formatter: (value) => {
+                const str = String(value || '');
+                const parts = str.split('/').filter(Boolean);
+                const short = parts.length > 2 ? (parts[0] + '/…/' + parts[parts.length - 1]) : str;
+                return truncateLabel(short, 18);
+              }
+            }
+          },
+          series: [
+            {
+              type: 'bar',
+              data: items.map((item) => item.codeLines),
+              barWidth: 10,
+              itemStyle: { color: palette[3], borderRadius: [0, 7, 7, 0] }
+            }
+          ]
+        });
+      }
+
+      const gitEl = document.getElementById('chart-git-weekly');
+      if (gitEl && projectStats && projectStats.git && projectStats.git.available && projectStats.git.weeklyCommits && projectStats.git.weeklyCommits.length) {
+        const items = projectStats.git.weeklyCommits;
+        initChart(gitEl, {
+          animation: false,
+          tooltip: buildTooltip((params) => {
+            const point = Array.isArray(params) ? params[0] : params;
+            const item = items[point.dataIndex];
+            if (!item) return '';
+            return escapeHtml(item.label) + '<br/>' + numberFormat(item.commits) + ' commits';
+          }),
+          grid: { left: 6, right: 12, top: 10, bottom: 22, containLabel: true },
+          xAxis: {
+            type: 'category',
+            data: items.map((item) => item.label),
+            axisTick: { show: false },
+            axisLine: { lineStyle: { color: borderColor } },
+            axisLabel: { color: mutedColor }
+          },
+          yAxis: {
+            type: 'value',
+            minInterval: 1,
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { color: mutedColor },
+            splitLine: { lineStyle: { color: borderColor } }
+          },
+          series: [
+            {
+              type: 'line',
+              data: items.map((item) => item.commits),
+              smooth: true,
+              symbol: 'circle',
+              symbolSize: 7,
+              lineStyle: { width: 2, color: accent },
+              itemStyle: { color: accent },
+              areaStyle: { color: accentSoft }
+            }
+          ]
+        });
+      }
+
+      const resizeAll = () => {
+        for (const chart of charts) {
+          chart.resize();
+        }
+      };
+
+      window.addEventListener('resize', resizeAll, { passive: true });
+      if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(() => resizeAll());
+        for (const target of resizeTargets) {
+          observer.observe(target);
+        }
+      }
     }
 
     const workspaceName = projectStats?.workspaceName || todayStats?.workspaceName || '当前工作区';
@@ -625,6 +839,7 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
         '</section>' +
         '<section class="panel"><div class="section-title">' + icon('newFile') + '<h2>今日新增文件</h2></div><div class="section-note">今天首次创建的文件。</div>' + renderTodayFiles(todayStats.newFiles, '今天还没有检测到新增文件。') + '</section>' +
         '<section class="panel"><div class="section-title">' + icon('files') + '<h2>今日变更文件</h2></div><div class="section-note">今天新增或修改过的文件清单，点击文件名可直接打开源码。</div>' + renderTodayFiles(todayStats.touchedFiles, '今天还没有检测到新增或修改过的文件。') + '</section>' +
+        (todayStats.totals.todoCount > 0 ? ('<section class="panel"><div class="section-title">' + icon('todo') + '<h2>今日待办清单</h2></div><div class="section-note">展示部分 TODO / FIXME / HACK 位置，点击可跳转到对应行。</div>' + renderTodoLocations(todayStats.todoLocations, '今日变更文件中未发现待办标记。') + '</section>') : '') +
         '<section class="panel"><div class="section-title">' + icon('deletedFile') + '<h2>今日删除文件</h2></div><div class="section-note">' + (todayStats.analysisMeta.gitAvailable ? '基于 Git 今日提交，仅展示文件路径。' : '当前工作区没有可用的 Git 数据，无法统计删除文件。') + '</div>' + renderDeletedFiles(todayStats.deletedFiles, '今天还没有检测到删除文件。') + '</section>';
     } else {
       html += '<section class="panel"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="empty-note">当前还没有今日统计数据。切到插件时会自动刷新，也可以手动点击“刷新今日统计”。</div></section>';
@@ -644,16 +859,17 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
           metricCard('核心模块', projectStats.insights.topDirectory, '当前代码量最高的模块', 'module') +
         '</section>' +
         '<section class="grid">' +
-          '<div class="panel"><div class="section-title">' + icon('language') + '<h2>语言代码量排行</h2></div><div class="section-note">按有效代码行数倒序。</div><div class="bars">' + renderBarList(projectStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无语言数据') + '</div></div>' +
+          '<div class="panel"><div class="section-title">' + icon('language') + '<h2>语言代码量排行</h2></div><div class="section-note">按有效代码行数倒序（支持 hover 查看详情）。</div><div class="chart" id="chart-language"></div><div class="bars chart-fallback">' + renderBarList(projectStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无语言数据') + '</div></div>' +
           '<div class="panel"><div class="section-title">' + icon('composition') + '<h2>代码组成</h2></div><div class="section-note">区分代码、注释与空白占比。</div>' + renderComposition(projectStats) + '</div>' +
         '</section>' +
         '<section class="grid">' +
-          '<div class="panel"><div class="section-title">' + icon('module') + '<h2>模块代码量排行</h2></div><div class="section-note">按目录深度聚合，可配合 codeInfo.analysis.moduleDepth 调整。</div><div class="bars">' + renderBarList(projectStats.directories.slice(0, presentation.compact ? 6 : 8), 'path', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无模块数据') + '</div></div>' +
+          '<div class="panel"><div class="section-title">' + icon('module') + '<h2>模块代码量排行</h2></div><div class="section-note">按目录深度聚合（支持 hover 查看详情）。</div><div class="chart" id="chart-module"></div><div class="bars chart-fallback">' + renderBarList(projectStats.directories.slice(0, presentation.compact ? 6 : 8), 'path', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无模块数据') + '</div></div>' +
           '<div class="panel"><div class="section-title">' + icon('todo') + '<h2>待办摘要</h2></div><div class="section-note">仅统计注释中的 TODO / FIXME / HACK 标记。</div>' + renderTodoSummary(projectStats.todoSummary) + '</div>' +
         '</section>' +
         '<section class="panel"><div class="section-title">' + icon('tree') + '<h2>模块目录树</h2></div><div class="section-note">支持逐层展开到最深目录，并展示当前目录下的文件（点击文件名可打开）。</div>' + renderTreeNodes(projectStats.directoryTree, 0) + '</section>' +
         '<section class="panel"><div class="section-title">' + icon('git') + '<h2>Git 提交趋势</h2></div><div class="section-note">基于当前工作区首个目录的 Git 历史。</div>' + renderGitStats(projectStats) + '</section>' +
         '<section class="panel"><div class="section-title">' + icon('todo') + '<h2>待办热点文件</h2></div><div class="section-note">点击文件名可直接打开源码定位待办。</div>' + renderTodoHotspots(projectStats.todoHotspots) + '</section>' +
+        (projectStats.insights.totalTodoCount > 0 ? ('<section class="panel"><div class="section-title">' + icon('todo') + '<h2>待办位置清单</h2></div><div class="section-note">展示部分 TODO / FIXME / HACK 位置，点击可跳转到对应行。</div>' + renderTodoLocations(projectStats.todoLocations, '未发现待办标记。') + '</section>') : '') +
         '<section class="panel"><div class="section-title">' + icon('language') + '<h2>语言统计明细</h2></div><div class="table-wrap"><table><thead><tr><th>语言</th><th>文件数</th><th>代码行</th><th>体积</th><th>待办数</th></tr></thead><tbody>' + renderLanguageTable(projectStats.languages) + '</tbody></table></div></section>' +
         '<section class="panel"><div class="section-title">' + icon('files') + '<h2>最大文件排行</h2></div><div class="section-note">点击文件名可直接打开源码。</div><div class="table-wrap"><table><thead><tr><th>文件</th><th>语言</th><th>总行数</th><th>代码行</th><th>待办数</th></tr></thead><tbody>' + renderLargestFiles(projectStats.largestFiles) + '</tbody></table></div></section>';
     } else if (!presentation.compact) {
@@ -661,13 +877,20 @@ export function getDashboardHtml(webview: vscode.Webview, data: DashboardData, p
     }
 
     app.innerHTML = html;
+    initCharts();
     document.addEventListener('click', (event) => {
       const element = event.target.closest('[data-command]');
       if (!element) return;
       if (element.hasAttribute('disabled')) return;
+      const lineAttr = element.getAttribute('data-line');
+      const characterAttr = element.getAttribute('data-character');
+      const line = lineAttr ? Number.parseInt(lineAttr, 10) : undefined;
+      const character = characterAttr ? Number.parseInt(characterAttr, 10) : undefined;
       vscode.postMessage({
         command: element.getAttribute('data-command'),
-        resource: element.getAttribute('data-resource') || undefined
+        resource: element.getAttribute('data-resource') || undefined,
+        line: Number.isFinite(line) ? line : undefined,
+        character: Number.isFinite(character) ? character : undefined
       });
     });
   </script>

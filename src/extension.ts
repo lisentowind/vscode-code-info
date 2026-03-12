@@ -27,7 +27,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const refreshToday = async (): Promise<void> => {
     await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
   };
-  sidebarProvider = new CodeInfoSidebarProvider(handleWebviewCommand, refreshToday);
+  sidebarProvider = new CodeInfoSidebarProvider(context.extensionUri, handleWebviewCommand, refreshToday);
   sidebarProvider.render(getDashboardData());
   statusBar.update(latestTodayStats);
 

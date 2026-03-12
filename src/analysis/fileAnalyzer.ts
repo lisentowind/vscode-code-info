@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import { detectLanguage } from './languageDetector';
-import { countTextMetrics } from './lineMetrics';
-import type { FileStat } from '../types';
+import { analyzeText } from './lineMetrics';
+import type { FileStat, TodoLocation } from '../types';
 
 const textDecoder = new TextDecoder('utf-8');
+const MAX_TODO_LOCATIONS_PER_FILE = 12;
 
 export type TextFileAnalysisResult =
-  | { kind: 'file'; file: FileStat }
+  | { kind: 'file'; file: FileStat; todoLocations: TodoLocation[] }
   | { kind: 'skipped-binary-content' }
   | { kind: 'skipped-unreadable' };
 
@@ -19,9 +20,19 @@ export async function analyzeTextFile(uri: vscode.Uri): Promise<TextFileAnalysis
 
     const language = detectLanguage(uri);
     const text = textDecoder.decode(bytes);
-    const metrics = countTextMetrics(text, language);
+    const analyzed = analyzeText(text, language, { maxTodoLocations: MAX_TODO_LOCATIONS_PER_FILE });
+    const metrics = analyzed.metrics;
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
     const path = workspaceFolder ? vscode.workspace.asRelativePath(uri, false) : uri.fsPath;
+    const todoLocations: TodoLocation[] = analyzed.todoMarkers.map((marker) => ({
+      resource: uri.toString(),
+      path,
+      language,
+      line: marker.line,
+      character: marker.character,
+      keyword: marker.keyword,
+      preview: marker.preview
+    }));
 
     return {
       kind: 'file',
@@ -35,7 +46,8 @@ export async function analyzeTextFile(uri: vscode.Uri): Promise<TextFileAnalysis
         blankLines: metrics.blankLines,
         bytes: bytes.byteLength,
         todoCounts: metrics.todoCounts
-      }
+      },
+      todoLocations
     };
   } catch {
     return { kind: 'skipped-unreadable' };

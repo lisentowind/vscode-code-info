@@ -4,6 +4,8 @@ import { openResource } from './resourceNavigator';
 export type WebviewCommandMessage = {
   command?: string;
   resource?: string;
+  line?: number;
+  character?: number;
 };
 
 export async function handleWebviewCommand(message?: WebviewCommandMessage): Promise<void> {
@@ -31,6 +33,9 @@ export async function handleWebviewCommand(message?: WebviewCommandMessage): Pro
       return;
     case 'openFile':
       await openResource(message.resource);
+      return;
+    case 'openLocation':
+      await openResource(message.resource, message.line, message.character);
       return;
     default:
       return;

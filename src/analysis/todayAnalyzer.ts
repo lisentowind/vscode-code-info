@@ -36,6 +36,8 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
     : [];
 
   const touchedFiles: TodayFileStat[] = [];
+  const todoLocations: TodayStats['todoLocations'] = [];
+  const maxTodoLocations = 200;
   let skippedUnreadableFiles = 0;
   let skippedBinaryFiles = initialBinarySkips;
   let currentIndex = 0;
@@ -60,6 +62,9 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
             status: timestampStatus.status,
             modifiedAt: timestampStatus.modifiedAt
           });
+          if (analyzed.todoLocations.length && todoLocations.length < maxTodoLocations) {
+            todoLocations.push(...analyzed.todoLocations.slice(0, maxTodoLocations - todoLocations.length));
+          }
           break;
         case 'skipped-binary-content':
           skippedBinaryFiles += 1;
@@ -78,6 +83,7 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
   );
   const newFiles = sortedTouchedFiles.filter((file) => file.status === 'new');
   const languages = buildLanguageSummaries(touchedFiles);
+  todoLocations.sort((left, right) => left.path.localeCompare(right.path) || left.line - right.line || left.keyword.localeCompare(right.keyword));
   const totals = touchedFiles.reduce(
     (accumulator, file) => {
       accumulator.touchedFiles += 1;
@@ -124,6 +130,7 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
     touchedFiles: sortedTouchedFiles.slice(0, 20),
     newFiles: newFiles.slice(0, 20),
     deletedFiles: deletedFiles.slice(0, 20),
+    todoLocations,
     insights: {
       topLanguage: topLanguage?.language ?? '—',
       topLanguageShare: totals.codeLines === 0 ? 0 : (topLanguage?.codeLines ?? 0) / totals.codeLines,

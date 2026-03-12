@@ -25,7 +25,7 @@ export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats>
   const { uris, gitRoot, scopeSummary } = await findWorkspaceFilesForAnalysis(folders, logger);
   const textUris = uris.filter((uri) => !isBinaryLike(uri));
   const initialBinarySkips = uris.length - textUris.length;
-  const { fileStats, skippedBinaryContent, skippedUnreadableFiles } = await analyzeFiles(textUris);
+  const { fileStats, todoLocations, skippedBinaryContent, skippedUnreadableFiles } = await analyzeFiles(textUris);
 
   const totals = buildWorkspaceTotals(fileStats);
   const languages = buildLanguageSummaries(fileStats);
@@ -53,6 +53,7 @@ export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats>
     files: [...fileStats].sort((left, right) => right.codeLines - left.codeLines),
     todoSummary,
     todoHotspots,
+    todoLocations,
     insights,
     analysisMeta: {
       durationMs,
@@ -68,12 +69,14 @@ export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats>
 
 async function analyzeFiles(
   uris: vscode.Uri[]
-): Promise<{ fileStats: FileStat[]; skippedBinaryContent: number; skippedUnreadableFiles: number }> {
+): Promise<{ fileStats: FileStat[]; todoLocations: WorkspaceStats['todoLocations']; skippedBinaryContent: number; skippedUnreadableFiles: number }> {
   const fileStats: FileStat[] = [];
+  const todoLocations: WorkspaceStats['todoLocations'] = [];
   let skippedBinaryContent = 0;
   let skippedUnreadableFiles = 0;
   let currentIndex = 0;
   const workerCount = Math.min(Math.max(getWorkerCount(), 1), Math.max(uris.length, 1));
+  const maxTodoLocations = 200;
 
   const workers = Array.from({ length: workerCount }, async () => {
     while (currentIndex < uris.length) {
@@ -84,6 +87,9 @@ async function analyzeFiles(
       switch (result.kind) {
         case 'file':
           fileStats.push(result.file);
+          if (result.todoLocations.length && todoLocations.length < maxTodoLocations) {
+            todoLocations.push(...result.todoLocations.slice(0, maxTodoLocations - todoLocations.length));
+          }
           break;
         case 'skipped-binary-content':
           skippedBinaryContent += 1;
@@ -96,5 +102,6 @@ async function analyzeFiles(
   });
 
   await Promise.all(workers);
-  return { fileStats, skippedBinaryContent, skippedUnreadableFiles };
+  todoLocations.sort((left, right) => left.path.localeCompare(right.path) || left.line - right.line || left.keyword.localeCompare(right.keyword));
+  return { fileStats, todoLocations, skippedBinaryContent, skippedUnreadableFiles };
 }

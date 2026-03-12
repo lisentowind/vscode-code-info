@@ -17,6 +17,13 @@ export type TextMetrics = {
   todoCounts: TodoCounts;
 };
 
+export type TodoMarker = {
+  line: number;
+  character: number;
+  keyword: (typeof TODO_KEYWORDS)[number];
+  preview: string;
+};
+
 const syntaxCache = new Map<string, LanguageSyntax>();
 
 export function createEmptyTodoCounts(): TodoCounts {
@@ -24,7 +31,16 @@ export function createEmptyTodoCounts(): TodoCounts {
 }
 
 export function countTextMetrics(text: string, language: string): TextMetrics {
+  return analyzeText(text, language).metrics;
+}
+
+export function analyzeText(
+  text: string,
+  language: string,
+  options?: { maxTodoLocations?: number }
+): { metrics: TextMetrics; todoMarkers: TodoMarker[] } {
   const syntax = getLanguageSyntax(language);
+  const maxTodoLocations = Math.max(options?.maxTodoLocations ?? 0, 0);
   const totals: TextMetrics = {
     lines: 0,
     codeLines: 0,
@@ -32,11 +48,14 @@ export function countTextMetrics(text: string, language: string): TextMetrics {
     blankLines: 0,
     todoCounts: createEmptyTodoCounts()
   };
+  const todoMarkers: TodoMarker[] = [];
 
   let activeBlock: CommentBlockToken | undefined;
   let activeString: { delimiter: string } | undefined;
 
+  let lineNumber = 0;
   forEachLine(text, (rawLine) => {
+    lineNumber += 1;
     totals.lines += 1;
 
     const trimmed = rawLine.trim();
@@ -121,7 +140,14 @@ export function countTextMetrics(text: string, language: string): TextMetrics {
       index += 1;
     }
 
-    accumulateTodoCounts(totals.todoCounts, commentParts.join(' '));
+    accumulateTodoCountsAndCollect(
+      totals.todoCounts,
+      commentParts.join(' '),
+      rawLine,
+      lineNumber,
+      todoMarkers,
+      maxTodoLocations
+    );
 
     if (hasCode) {
       totals.codeLines += 1;
@@ -136,7 +162,7 @@ export function countTextMetrics(text: string, language: string): TextMetrics {
     totals.codeLines += 1;
   });
 
-  return totals;
+  return { metrics: totals, todoMarkers };
 }
 
 function getLanguageSyntax(language: string): LanguageSyntax {
@@ -155,7 +181,14 @@ function getLanguageSyntax(language: string): LanguageSyntax {
   return syntax;
 }
 
-function accumulateTodoCounts(target: TodoCounts, commentText: string): void {
+function accumulateTodoCountsAndCollect(
+  target: TodoCounts,
+  commentText: string,
+  rawLine: string,
+  line: number,
+  todoMarkers: TodoMarker[],
+  maxTodoLocations: number
+): void {
   if (!commentText.trim()) {
     return;
   }
@@ -164,6 +197,15 @@ function accumulateTodoCounts(target: TodoCounts, commentText: string): void {
     const count = countKeyword(commentText, keyword);
     if (count === 0) {
       continue;
+    }
+
+    if (maxTodoLocations > 0 && todoMarkers.length < maxTodoLocations) {
+      todoMarkers.push({
+        line,
+        character: 1,
+        keyword,
+        preview: rawLine.trim().replace(/\s+/g, ' ').slice(0, 160)
+      });
     }
 
     switch (keyword) {
