@@ -688,6 +688,43 @@ ${echartsScript}
         });
       }
 
+      const todayLanguageEl = document.getElementById('chart-today-language');
+      if (todayLanguageEl && todayStats && todayStats.languages && todayStats.languages.length) {
+        const items = todayStats.languages.slice(0, presentation.compact ? 6 : 8);
+        initChart(todayLanguageEl, {
+          animation: false,
+          tooltip: buildTooltip((params) => {
+            const point = Array.isArray(params) ? params[0] : params;
+            const item = items[point.dataIndex];
+            if (!item) return '';
+            return escapeHtml(item.language) + '<br/>' + numberFormat(item.codeLines) + ' 行 · ' + numberFormat(item.files) + ' 文件';
+          }),
+          grid: { left: 4, right: 10, top: 8, bottom: 4, containLabel: true },
+          xAxis: {
+            type: 'value',
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { show: false },
+            splitLine: { show: false }
+          },
+          yAxis: {
+            type: 'category',
+            data: items.map((item) => item.language),
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { color: mutedColor, formatter: (value) => truncateLabel(value, 16) }
+          },
+          series: [
+            {
+              type: 'bar',
+              data: items.map((item) => item.codeLines),
+              barWidth: 10,
+              itemStyle: { color: palette[5], borderRadius: [0, 7, 7, 0] }
+            }
+          ]
+        });
+      }
+
       const moduleEl = document.getElementById('chart-module');
       if (moduleEl && projectStats && projectStats.directories && projectStats.directories.length) {
         const items = projectStats.directories.slice(0, presentation.compact ? 6 : 8);
@@ -828,7 +865,7 @@ ${echartsScript}
           metricCard('最近活跃文件', todayStats.insights.topPath, '按更新时间和代码量排序', 'detail') +
         '</section>' +
         '<section class="grid">' +
-          '<div class="panel"><div class="section-title">' + icon('language') + '<h2>今日语言分布</h2></div><div class="section-note">按今日变更文件的代码行统计。</div><div class="bars">' + renderBarList(todayStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '今日暂无语言数据') + '</div></div>' +
+          '<div class="panel"><div class="section-title">' + icon('language') + '<h2>今日语言分布</h2></div><div class="section-note">按今日变更文件的代码行统计（支持 hover 查看详情）。</div><div class="chart" id="chart-today-language"></div><div class="bars chart-fallback">' + renderBarList(todayStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '今日暂无语言数据') + '</div></div>' +
           '<div class="panel"><div class="section-title">' + icon('meta') + '<h2>今日元信息</h2></div><div class="section-note">本模块只在视图可见时刷新，避免长期常驻分析。</div><div class="todo-summary">' +
             '<div class="todo-item"><span>扫描范围</span><span class="muted">' + escapeHtml(todayStats.analysisMeta.scopeSummary) + '</span></div>' +
             '<div class="todo-item"><span>匹配文件</span><span class="muted">' + numberFormat(todayStats.analysisMeta.matchedFiles) + '</span></div>' +
