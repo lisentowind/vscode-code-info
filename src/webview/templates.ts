@@ -10,7 +10,7 @@ export function getEmptyStateHtml(
   const showOpenPanel = options?.showOpenPanel ?? true;
   const title = compact ? 'Code Info 侧边栏' : 'Code Info';
   const subtitle = compact ? '先切到插件加载今日统计，再按需执行项目分析。' : '先切到插件加载今日统计，再打开完整项目分析看板。';
-  const openPanelButton = showOpenPanel ? '<button class="secondary" data-command="openPanel">打开看板</button>' : '';
+  const openPanelButton = showOpenPanel ? '<button class="action secondary" data-command="openPanel">打开看板</button>' : '';
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -19,30 +19,238 @@ export function getEmptyStateHtml(
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { margin: 0; padding: 20px; color: var(--vscode-editor-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); }
-    .card { border: 1px solid var(--vscode-panel-border); border-radius: 14px; padding: 18px; background: var(--vscode-sideBar-background); }
-    h1 { font-size: 18px; margin: 0 0 10px; }
-    p { color: var(--vscode-descriptionForeground); line-height: 1.5; margin: 0 0 16px; }
-    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    button { border: 1px solid var(--vscode-button-border, transparent); border-radius: 8px; padding: 8px 12px; cursor: pointer; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-    button.secondary { background: transparent; color: var(--vscode-textLink-foreground); border-color: var(--vscode-panel-border); }
+    :root {
+      color-scheme: light dark;
+      --bg: var(--vscode-editor-background);
+      --panel: var(--vscode-sideBar-background);
+      --text: var(--vscode-editor-foreground);
+      --muted: var(--vscode-descriptionForeground);
+      --accent: var(--vscode-textLink-foreground);
+      --border-soft: color-mix(in srgb, var(--vscode-panel-border) 84%, var(--accent) 16%);
+      --border: color-mix(in srgb, var(--vscode-panel-border) 72%, var(--accent) 28%);
+      --surface: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
+      --surface-hover: color-mix(in srgb, var(--panel) 86%, var(--accent) 14%);
+      font-family: var(--vscode-font-family);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 10%, transparent), transparent 28%),
+        radial-gradient(circle at left center, color-mix(in srgb, var(--accent) 7%, transparent), transparent 24%),
+        repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 1.6%, transparent) 0, color-mix(in srgb, var(--accent) 1.6%, transparent) 1px, transparent 1px, transparent 44px),
+        var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+    .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 0;
+      background: transparent;
+    }
+    .sticky-sentinel { height: 1px; }
+    .topbar-inner {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      width: 100%;
+      margin: 0 auto;
+      padding: ${compact ? '10px 12px' : '14px 18px'};
+      border-radius: 0;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 78%, transparent), color-mix(in srgb, var(--panel) 90%, transparent));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--border-soft) 72%, transparent) inset,
+        0 10px 20px color-mix(in srgb, black 10%, transparent);
+      backdrop-filter: saturate(120%) blur(10px);
+      transition:
+        width 220ms cubic-bezier(0.2, 0.9, 0.2, 1),
+        border-radius 220ms cubic-bezier(0.2, 0.9, 0.2, 1),
+        box-shadow 220ms ease,
+        background 220ms ease;
+      will-change: width, border-radius, box-shadow, background;
+    }
+	    .topbar.floating .topbar-inner {
+	      width: min(1160px, calc(100% - 24px));
+	      border-radius: 18px;
+	      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 64%, transparent), color-mix(in srgb, var(--panel) 82%, transparent));
+	      box-shadow:
+	        0 0 0 1px color-mix(in srgb, var(--border-soft) 78%, transparent) inset,
+	        0 16px 36px color-mix(in srgb, black 14%, transparent);
+	    }
+	    body.compact .topbar.floating .topbar-inner {
+	      width: 100%;
+	      border-radius: 0;
+	      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 78%, transparent), color-mix(in srgb, var(--panel) 90%, transparent));
+	      box-shadow:
+	        0 0 0 1px color-mix(in srgb, var(--border-soft) 72%, transparent) inset,
+	        0 10px 20px color-mix(in srgb, black 10%, transparent);
+	    }
+	    @media (prefers-reduced-motion: reduce) {
+	      .topbar-inner { transition: none; }
+	    }
+    .brand { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 10px; align-items: start; min-width: 0; }
+    .brand-title { font-size: ${compact ? '14px' : '16px'}; font-weight: 600; line-height: 1.25; margin: 0; }
+    .brand-sub { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .brand-sub strong { color: var(--text); font-weight: 600; }
+    .ui-icon { width: 16px; height: 16px; display: grid; place-items: center; line-height: 0; margin-top: 2px; color: var(--accent); }
+    .ui-icon svg { width: 16px; height: 16px; display: block; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+    .action {
+      border: 1px solid color-mix(in srgb, var(--vscode-button-border, var(--border-soft)) 70%, var(--accent) 30%);
+      border-radius: 10px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--vscode-button-background) 92%, white 8%), var(--vscode-button-background));
+      color: var(--vscode-button-foreground);
+      padding: 8px 12px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+    .action:hover { transform: translateY(-1px); border-color: var(--border); box-shadow: 0 10px 22px color-mix(in srgb, black 14%, transparent); }
+    .action.secondary { background: color-mix(in srgb, var(--panel) 72%, transparent); color: var(--accent); border-color: var(--border-soft); }
+    .action[disabled] { cursor: not-allowed; opacity: 0.55; transform: none; box-shadow: none; }
+    .page { padding: ${compact ? '12px' : '18px'}; display: grid; gap: 14px; }
+    .panel {
+      position: relative;
+      border: 1px solid var(--border-soft);
+      border-radius: 16px;
+      padding: ${compact ? '14px' : '18px'};
+      background: linear-gradient(180deg, var(--surface), var(--panel));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--text) 3%, transparent) inset,
+        0 14px 28px color-mix(in srgb, black 12%, transparent);
+      overflow: hidden;
+    }
+    .panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 35%);
+      opacity: 0.4;
+    }
+    .empty-hero { display: grid; grid-template-columns: ${compact ? '1fr' : '160px minmax(0,1fr)'}; gap: 14px; align-items: center; }
+    .empty-art {
+      width: ${compact ? '100%' : '160px'};
+      height: ${compact ? '88px' : '120px'};
+      border-radius: 14px;
+      border: 1px solid color-mix(in srgb, var(--border-soft) 72%, transparent);
+      background:
+        radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 50%),
+        radial-gradient(circle at 70% 60%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 52%),
+        repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent) 5%, transparent) 0, color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px, transparent 12px),
+        color-mix(in srgb, var(--panel) 80%, transparent);
+      box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 14%, transparent);
+    }
+    .empty-title { display: grid; grid-template-columns: 16px minmax(0,1fr); align-items: center; column-gap: 10px; margin-bottom: 6px; }
+    .empty-title h1 { margin: 0; font-size: ${compact ? '16px' : '18px'}; line-height: 1.25; }
+    .empty-body p { margin: 0 0 14px; color: var(--muted); line-height: 1.55; font-size: 13px; }
+    .steps { display: grid; gap: 10px; }
+    .step {
+      border: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .step-text { min-width: 0; }
+    .step-title { font-weight: 600; margin: 0 0 2px; font-size: 13px; }
+    .step-desc { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    @media (max-width: 420px) { .empty-hero { grid-template-columns: 1fr; } }
   </style>
 </head>
-<body>
-  <div class="card">
-    <h1>${title}</h1>
-    <p>${subtitle}</p>
-    <div class="actions">
-      <button data-command="refreshToday">刷新今日统计</button>
-      <button data-command="showStats">开始项目分析</button>
-      ${openPanelButton}
-    </div>
+<body class="${compact ? 'compact' : ''}">
+  <div class="shell">
+    <div class="sticky-sentinel" aria-hidden="true"></div>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="ui-icon" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 11.5V4.5h10v7"/><path d="M5 13.5h6"/><path d="M6 11.5v2"/><path d="M10 11.5v2"/>
+            </svg>
+          </span>
+          <div>
+            <div class="brand-title">${title}</div>
+            <div class="brand-sub">${subtitle}</div>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button class="action" data-command="refreshToday">刷新今日统计</button>
+          <button class="action" data-command="showStats">开始项目分析</button>
+          ${openPanelButton}
+        </div>
+      </div>
+    </header>
+    <main class="page">
+      <section class="panel">
+        <div class="empty-hero">
+          <div class="empty-art" aria-hidden="true"></div>
+          <div class="empty-body">
+            <div class="empty-title">
+              <span class="ui-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8 2.5v3"/><path d="M8 10.5v3"/><path d="M3 8h3"/><path d="M10 8h3"/><circle cx="8" cy="8" r="2.5"/>
+                </svg>
+              </span>
+              <h1>还没有可展示的数据</h1>
+            </div>
+            <p>建议按下面 3 步走一遍：先拿到“今日统计”，再按需做“项目分析”，最后在大面板里查看完整看板。</p>
+            <div class="steps">
+              <div class="step">
+                <div class="step-text">
+                  <div class="step-title">1) 刷新今日统计</div>
+                  <div class="step-desc">快速获取今天新增/修改文件与语言分布。</div>
+                </div>
+                <button class="action secondary" data-command="refreshToday">执行</button>
+              </div>
+              <div class="step">
+                <div class="step-text">
+                  <div class="step-title">2) 开始项目分析</div>
+                  <div class="step-desc">全量扫描，生成模块/语言/待办等项目级数据。</div>
+                </div>
+                <button class="action secondary" data-command="showStats">执行</button>
+              </div>
+              <div class="step">
+                <div class="step-text">
+                  <div class="step-title">3) 打开详细看板</div>
+                  <div class="step-desc">更大空间展示今日 + 项目统计（适合长列表）。</div>
+                </div>
+                ${showOpenPanel ? '<button class="action secondary" data-command="openPanel">执行</button>' : '<button class="action secondary" disabled>不可用</button>'}
+              </div>
+            </div>
+            <p class="hint">提示：如果你只想分析某些目录，可先点“选择目录”（在看板顶部操作栏）。</p>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const topbar = document.querySelector('.topbar');
+    const sentinel = document.querySelector('.sticky-sentinel');
+    if (topbar && sentinel && typeof IntersectionObserver !== 'undefined') {
+      const observer = new IntersectionObserver(([entry]) => {
+        topbar.classList.toggle('floating', !entry.isIntersecting);
+      }, { threshold: [0, 1] });
+      observer.observe(sentinel);
+    }
     document.addEventListener('click', (event) => {
       const element = event.target.closest('[data-command]');
       if (!element) return;
+      if (element.hasAttribute('disabled')) return;
       vscode.postMessage({ command: element.getAttribute('data-command') });
     });
   </script>
@@ -85,52 +293,166 @@ export function getDashboardHtml(
       --panel-glow: color-mix(in srgb, var(--accent) 10%, transparent);
       --surface: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
       --surface-hover: color-mix(in srgb, var(--panel) 86%, var(--accent) 14%);
+      --stickyTop: 64px;
       font-family: var(--vscode-font-family);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 20px;
+      padding: 0;
       background:
-        radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 9%, transparent), transparent 28%),
-        radial-gradient(circle at left center, color-mix(in srgb, var(--accent) 6%, transparent), transparent 24%),
+        radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 10%, transparent), transparent 28%),
+        radial-gradient(circle at left center, color-mix(in srgb, var(--accent) 7%, transparent), transparent 24%),
+        repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 1.6%, transparent) 0, color-mix(in srgb, var(--accent) 1.6%, transparent) 1px, transparent 1px, transparent 44px),
         var(--bg);
       color: var(--text);
       overflow-x: hidden;
     }
-    body.compact { padding: 12px; }
-    .page { display: grid; gap: 16px; }
-    .hero, .card, .panel {
+    body.compact { --stickyTop: 52px; }
+    .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: 0;
+      background: transparent;
+    }
+    .sticky-sentinel { height: 1px; }
+    .topbar-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+      width: 100%;
+      margin: 0 auto;
+      padding: 14px 20px;
+      border-radius: 0;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 78%, transparent), color-mix(in srgb, var(--panel) 90%, transparent));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--border-soft) 72%, transparent) inset,
+        0 10px 20px color-mix(in srgb, black 10%, transparent);
+      backdrop-filter: saturate(120%) blur(10px);
+      transition:
+        width 240ms cubic-bezier(0.2, 0.9, 0.2, 1),
+        border-radius 240ms cubic-bezier(0.2, 0.9, 0.2, 1),
+        box-shadow 240ms ease,
+        background 240ms ease;
+      will-change: width, border-radius, box-shadow, background;
+    }
+	    .topbar.floating .topbar-inner {
+	      width: min(1160px, calc(100% - 24px));
+	      border-radius: 18px;
+	      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 64%, transparent), color-mix(in srgb, var(--panel) 84%, transparent));
+	      box-shadow:
+	        0 0 0 1px color-mix(in srgb, var(--border-soft) 78%, transparent) inset,
+	        0 16px 36px color-mix(in srgb, black 14%, transparent);
+	    }
+	    body.compact .topbar.floating .topbar-inner {
+	      width: 100%;
+	      border-radius: 0;
+	      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 78%, transparent), color-mix(in srgb, var(--panel) 90%, transparent));
+	      box-shadow:
+	        0 0 0 1px color-mix(in srgb, var(--border-soft) 72%, transparent) inset,
+	        0 10px 20px color-mix(in srgb, black 10%, transparent);
+	    }
+	    body.compact .topbar-inner { padding: 10px 12px; }
+	    @media (prefers-reduced-motion: reduce) {
+	      .topbar-inner { transition: none; }
+	    }
+    .brand { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+    .brand-text { min-width: 0; }
+    .brand-title { font-size: 16px; font-weight: 600; line-height: 1.25; }
+    body.compact .brand-title { font-size: 14px; }
+    .brand-sub { margin-top: 4px; color: var(--muted); line-height: 1.5; font-size: 12px; }
+    body.compact .brand-sub { display: none; }
+    .brand-meta { margin-top: 6px; color: var(--muted); line-height: 1.5; font-size: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .meta-item { display: inline-flex; gap: 6px; align-items: center; }
+    .meta-item strong { color: var(--text); font-weight: 600; }
+    .meta-dot { width: 4px; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 70%, transparent); opacity: 0.9; }
+    .topbar.floating .brand-sub { display: none; }
+    .topbar.floating .brand-meta { margin-top: 4px; }
+    .topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+    .toolbar-divider { width: 1px; height: 22px; background: color-mix(in srgb, var(--border-soft) 60%, transparent); opacity: 0.7; }
+    .menu { position: relative; }
+    .menu > summary { list-style: none; }
+    .menu > summary::-webkit-details-marker { display: none; }
+    .menu-popover {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: min(320px, calc(100vw - 32px));
+      padding: 10px;
+      border-radius: 14px;
+      border: 1px solid color-mix(in srgb, var(--border-soft) 80%, transparent);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 70%, transparent), color-mix(in srgb, var(--panel) 86%, transparent));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--text) 3%, transparent) inset,
+        0 16px 36px color-mix(in srgb, black 16%, transparent);
+      backdrop-filter: saturate(120%) blur(12px);
+      transform-origin: top right;
+      transform: translateY(-6px) scale(0.98);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 160ms ease, opacity 160ms ease;
+      z-index: 50;
+    }
+    details.menu[open] .menu-popover { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+    .menu-group { padding: 8px; border-radius: 12px; }
+    .menu-group + .menu-group { margin-top: 8px; border-top: 1px solid color-mix(in srgb, var(--border-soft) 65%, transparent); }
+    .menu-title { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 2px 2px 8px; }
+    .menu-item {
+      width: 100%;
+      border: 1px solid color-mix(in srgb, var(--border-soft) 65%, transparent);
+      border-radius: 12px;
+      padding: 10px 10px;
+      background: color-mix(in srgb, var(--panel) 78%, transparent);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr) auto;
+      align-items: center;
+      column-gap: 10px;
+      transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+    }
+    .menu-item:hover { background: color-mix(in srgb, var(--panel) 70%, var(--accent) 10%); border-color: var(--border); transform: translateY(-1px); }
+    .menu-item[disabled],
+    .menu-item[disabled]:hover { cursor: not-allowed; opacity: 0.55; transform: none; border-color: color-mix(in srgb, var(--border-soft) 80%, transparent); background: color-mix(in srgb, var(--panel) 82%, transparent); }
+    .menu-item .menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .menu-item .menu-hint { color: var(--muted); font-size: 12px; }
+    .page { display: grid; gap: 16px; padding: 18px 20px 26px; }
+    body.compact .page { padding: 12px; gap: 12px; }
+    .card, .panel {
       position: relative;
       border: 1px solid var(--border-soft);
       border-radius: 14px;
       background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, var(--accent) 6%), var(--panel));
       box-shadow:
         0 0 0 1px color-mix(in srgb, var(--text) 3%, transparent) inset,
-        0 10px 24px color-mix(in srgb, black 10%, transparent);
+        0 10px 20px color-mix(in srgb, black 9%, transparent);
       min-width: 0;
       transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
     }
-    .hero::before, .card::before, .panel::before {
+    .card::before, .panel::before {
       content: '';
       position: absolute;
       inset: 0;
       border-radius: inherit;
       pointer-events: none;
       background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 35%);
-      opacity: 0.6;
+      opacity: 0.35;
     }
-    .card:hover, .panel:hover, .hero:hover {
+    .card:hover, .panel:hover {
       border-color: var(--border);
       background: linear-gradient(180deg, var(--surface-hover), var(--panel));
       box-shadow:
         0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent) inset,
-        0 14px 32px color-mix(in srgb, black 14%, transparent),
-        0 0 0 1px var(--panel-glow);
-      transform: translateY(-1px);
+        0 14px 28px color-mix(in srgb, black 12%, transparent);
     }
-    .hero { display: flex; justify-content: space-between; gap: 16px; padding: 18px; background: linear-gradient(135deg, var(--surface), var(--panel-2)); }
-    .hero h1 { margin: 0; font-size: 20px; }
     .title-row, .section-title, .metric-head, .empty-title {
       display: grid;
       grid-template-columns: 16px minmax(0, 1fr);
@@ -147,6 +469,7 @@ export function getDashboardHtml(
       place-items: center;
       line-height: 0;
       align-self: center;
+      color: var(--accent);
     }
     .ui-icon svg {
       width: 16px;
@@ -169,9 +492,6 @@ export function getDashboardHtml(
     .metric-head .metric-label {
       align-self: center;
     }
-    .hero p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 13px; }
-    .hero-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-content: flex-start; }
     .action {
       border: 1px solid color-mix(in srgb, var(--vscode-button-border, var(--border-soft)) 70%, var(--accent) 30%);
       border-radius: 8px;
@@ -197,6 +517,14 @@ export function getDashboardHtml(
       background: color-mix(in srgb, var(--panel) 72%, transparent);
       color: var(--accent);
       border-color: var(--border-soft);
+    }
+    .action[disabled],
+    .action[disabled]:hover {
+      cursor: not-allowed;
+      opacity: 0.55;
+      transform: none;
+      box-shadow: none;
+      border-color: color-mix(in srgb, var(--border-soft) 90%, transparent);
     }
     .badge {
       border-radius: 999px;
@@ -288,6 +616,8 @@ export function getDashboardHtml(
       font-size: 13px;
       line-height: 1.5;
     }
+    .empty-note strong { color: var(--text); font-weight: 600; }
+    .inline-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
     .table-wrap { overflow-x: auto; width: 100%; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
     th, td {
@@ -303,7 +633,7 @@ export function getDashboardHtml(
       font-weight: 600;
       background: color-mix(in srgb, var(--panel) 80%, var(--accent) 20%);
       position: sticky;
-      top: 0;
+      top: var(--stickyTop);
     }
     td.mono {
       font-family: var(--vscode-editor-font-family);
@@ -365,7 +695,8 @@ export function getDashboardHtml(
     .tree-file-row .link-button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tree-more { padding-left: 4px; }
     body.compact .page { gap: 12px; }
-    body.compact .hero { flex-direction: column; padding: 14px; }
+    body.compact .chips { display: none; }
+    body.compact .topbar-right { width: 100%; justify-content: flex-start; }
     body.compact .grid, body.compact .git-grid { grid-template-columns: 1fr; }
     body.compact .cards { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
     body.compact .metric-value { font-size: 22px; }
@@ -375,13 +706,17 @@ export function getDashboardHtml(
     .panel.chart-ready .chart { display: block; }
     .panel.chart-ready .chart-fallback { display: none; }
     body.compact .chart { height: 180px; }
-    @media (max-width: 960px) { .grid, .git-grid { grid-template-columns: 1fr; } .hero { flex-direction: column; } }
+    @media (max-width: 960px) {
+      .grid, .git-grid { grid-template-columns: 1fr; }
+      .topbar-inner { flex-direction: column; align-items: stretch; }
+      .topbar-right { justify-content: flex-start; }
+    }
     @media (max-width: 320px) { .cards { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body class="${presentation.compact ? 'compact' : ''}">
   <script nonce="${nonce}" id="__codeInfoPayload" type="application/json">${payload}</script>
-  <div id="app" class="page"></div>
+  <div id="app" class="shell"></div>
   <pre id="error" style="display:none;white-space:pre-wrap;padding:12px;border:1px solid var(--border);border-radius:12px;"></pre>
 ${echartsScript}
   <script nonce="${nonce}">
@@ -411,10 +746,13 @@ ${echartsScript}
 
     const projectStats = data.projectStats;
     const todayStats = data.todayStats;
-    const app = document.getElementById('app');
+    let app = document.getElementById('app');
     if (!app) {
-      showError('Dashboard root not found.');
+      app = document.createElement('div');
+      app.id = 'app';
+      document.body.appendChild(app);
     }
+    app.className = 'shell';
 
     function escapeHtml(value) {
       return String(value)
@@ -444,6 +782,7 @@ ${echartsScript}
         detail: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3.5h10v9H3z"/><path d="M5 6h6M5 8.5h6M5 11h4"/></svg>',
         scope: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 3.5h11v9h-11z"/><path d="M5 6.5h6M6.5 3.5v9"/></svg>',
         export: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v7"/><path d="M5.5 7 8 9.5 10.5 7"/><path d="M3 11.5h10v2H3z"/></svg>',
+        menu: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h10"/><path d="M3 8h10"/><path d="M3 11.5h10"/></svg>',
         json: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5c-1.3 0-2 .7-2 2v1c0 .8-.3 1.3-1 1.5.7.2 1 .7 1 1.5v1c0 1.3.7 2 2 2M10 3.5c1.3 0 2 .7 2 2v1c0 .8.3 1.3 1 1.5-.7.2-1 .7-1 1.5v1c0 1.3-.7 2-2 2"/></svg>',
         csv: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3.5h10v9H3z"/><path d="M3 6.5h10M3 9.5h10M6.3 3.5v9M9.7 3.5v9"/></svg>',
         language: '<svg' + attrs + ' viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5 6.5 4h3l3 8.5"/><path d="M5.1 9.5h5.8"/></svg>',
@@ -860,28 +1199,69 @@ ${echartsScript}
     }
 
     const workspaceName = projectStats?.workspaceName || todayStats?.workspaceName || '当前工作区';
+    const generatedAt = todayStats?.generatedAt || projectStats?.generatedAt;
+    const generatedLabel = generatedAt ? new Date(generatedAt).toLocaleString() : '';
     const heroBadges = [];
     if (todayStats) heroBadges.push('<span class="badge">今日变更 ' + numberFormat(todayStats.totals.touchedFiles) + ' 文件</span>');
     if (todayStats) heroBadges.push('<span class="badge">今日新增 ' + numberFormat(todayStats.totals.newFiles) + ' 文件</span>');
     if (todayStats && todayStats.totals.deletedFiles) heroBadges.push('<span class="badge">今日删除 ' + numberFormat(todayStats.totals.deletedFiles) + ' 文件</span>');
     if (projectStats) heroBadges.push('<span class="badge">项目分析 ' + numberFormat(projectStats.totals.files) + ' 文件</span>');
     if (projectStats) heroBadges.push('<span class="badge">项目耗时 ' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '</span>');
-    const actionsHtml = presentation.compact
+    const metaParts = [];
+    metaParts.push('<span class="meta-item">工作区<strong>' + escapeHtml(workspaceName) + '</strong></span>');
+    if (generatedLabel) metaParts.push('<span class="meta-dot" aria-hidden="true"></span><span class="meta-item">更新<strong>' + escapeHtml(generatedLabel) + '</strong></span>');
+    if (projectStats) metaParts.push('<span class="meta-dot" aria-hidden="true"></span><span class="meta-item">耗时<strong>' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '</strong></span>');
+    const metaHtml = metaParts.join('');
+
+    const chipsHtml = heroBadges.slice(0, presentation.compact ? 2 : 4).join('');
+
+    const quickActionsHtml = presentation.compact
       ? '<button class="action" data-command="refreshToday">' + icon('refresh') + '刷新今日统计</button>' +
         '<button class="action secondary" data-command="openPanel">' + icon('detail') + '详情分析</button>'
       : '<button class="action" data-command="refreshToday">' + icon('refresh') + '刷新今日统计</button>' +
-        '<button class="action" data-command="showStats">' + icon('project') + '开始项目分析</button>' +
-        '<button class="action secondary" data-command="refresh">' + icon('refresh') + '重新分析项目</button>' +
-        '<button class="action secondary" data-command="selectScope">' + icon('scope') + '选择目录</button>' +
-        '<button class="action secondary" data-command="openPanel">' + icon('detail') + '详细看板</button>' +
-        '<button class="action secondary" data-command="exportJson"' + (projectStats ? '' : ' disabled') + '>' + icon('json') + '导出 JSON</button>' +
-        '<button class="action secondary" data-command="exportCsv"' + (projectStats ? '' : ' disabled') + '>' + icon('csv') + '导出 CSV</button>';
+        '<button class="action" data-command="showStats">' + icon('project') + '开始项目分析</button>';
+
+    const menuHtml =
+      '<details class="menu" id="__codeInfoMenu">' +
+        '<summary class="action secondary" aria-label="打开操作菜单">' + icon('menu') + '操作</summary>' +
+        '<div class="menu-popover" role="menu">' +
+          '<div class="menu-group">' +
+            '<div class="menu-title">分析</div>' +
+            '<button class="menu-item" data-command="refreshToday" role="menuitem">' + icon('refresh') + '<span class="menu-label">刷新今日统计</span><span class="menu-hint">Today</span></button>' +
+            '<button class="menu-item" data-command="showStats" role="menuitem">' + icon('project') + '<span class="menu-label">开始项目分析</span><span class="menu-hint">Scan</span></button>' +
+            '<button class="menu-item" data-command="refresh" role="menuitem">' + icon('refresh') + '<span class="menu-label">重新分析项目</span><span class="menu-hint">Re-run</span></button>' +
+            '<button class="menu-item" data-command="selectScope" role="menuitem">' + icon('scope') + '<span class="menu-label">选择目录</span><span class="menu-hint">Scope</span></button>' +
+          '</div>' +
+          '<div class="menu-group">' +
+            '<div class="menu-title">视图</div>' +
+            '<button class="menu-item" data-command="openPanel" role="menuitem">' + icon('detail') + '<span class="menu-label">打开详细看板</span><span class="menu-hint">Panel</span></button>' +
+          '</div>' +
+          '<div class="menu-group">' +
+            '<div class="menu-title">导出</div>' +
+            '<button class="menu-item" data-command="exportJson" role="menuitem"' + (projectStats ? '' : ' disabled') + '>' + icon('json') + '<span class="menu-label">导出 JSON</span><span class="menu-hint">.json</span></button>' +
+            '<button class="menu-item" data-command="exportCsv" role="menuitem"' + (projectStats ? '' : ' disabled') + '>' + icon('csv') + '<span class="menu-label">导出 CSV</span><span class="menu-hint">.csv</span></button>' +
+          '</div>' +
+        '</div>' +
+      '</details>';
 
     let html = '' +
-      '<section class="hero">' +
-        '<div><div class="title-row">' + icon(presentation.compact ? 'today' : 'dashboard') + '<h1>' + escapeHtml(presentation.title) + '</h1></div><p>' + escapeHtml(presentation.subtitle) + '<br>工作区：' + escapeHtml(workspaceName) + '</p><div class="hero-meta">' + heroBadges.join('') + '</div></div>' +
-        '<div class="actions">' + actionsHtml + '</div>' +
-      '</section>';
+      '<header class="topbar">' +
+        '<div class="topbar-inner">' +
+          '<div class="brand">' +
+            icon(presentation.compact ? 'today' : 'dashboard') +
+            '<div class="brand-text">' +
+              '<div class="brand-title">' + escapeHtml(presentation.title) + '</div>' +
+              '<div class="brand-sub">' + escapeHtml(presentation.subtitle) + '</div>' +
+              '<div class="brand-meta">' + metaHtml + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="topbar-right">' +
+            '<div class="chips">' + chipsHtml + '</div>' +
+            '<div class="toolbar">' + quickActionsHtml + menuHtml + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</header>' +
+      '<main class="page">';
 
     if (todayStats) {
       html += '' +
@@ -942,10 +1322,60 @@ ${echartsScript}
         '<section class="panel"><div class="section-title">' + icon('language') + '<h2>语言统计明细</h2></div><div class="table-wrap"><table><thead><tr><th>语言</th><th>文件数</th><th>代码行</th><th>体积</th><th>待办数</th></tr></thead><tbody>' + renderLanguageTable(projectStats.languages) + '</tbody></table></div></section>' +
         '<section class="panel"><div class="section-title">' + icon('files') + '<h2>最大文件排行</h2></div><div class="section-note">点击文件名可直接打开源码。</div><div class="table-wrap"><table><thead><tr><th>文件</th><th>语言</th><th>总行数</th><th>代码行</th><th>待办数</th></tr></thead><tbody>' + renderLargestFiles(projectStats.largestFiles) + '</tbody></table></div></section>';
     } else if (!presentation.compact) {
-      html += '<section class="panel"><div class="section-title">' + icon('project') + '<h2>项目分析模块</h2></div><div class="empty-note">当前还没有项目分析结果。点击“开始项目分析”后，会执行全量扫描并展示完整的项目级数据。</div></section>';
+      html += '' +
+        '<section class="panel">' +
+          '<div class="section-title">' + icon('project') + '<h2>项目分析模块</h2></div>' +
+          '<div class="empty-note">' +
+            '<strong>还没有项目分析结果</strong><br>' +
+            '点击“开始项目分析”后，会执行全量扫描并展示完整的项目级数据。' +
+            '<div class="inline-actions">' +
+              '<button class="action" data-command="showStats">' + icon('project') + '开始项目分析</button>' +
+              '<button class="action secondary" data-command="selectScope">' + icon('scope') + '选择目录</button>' +
+            '</div>' +
+          '</div>' +
+        '</section>';
     }
 
-    app.innerHTML = html;
+    html += '</main>';
+    const updateStickyTop = () => {
+      const bar = document.querySelector('.topbar');
+      if (!bar) return;
+      document.body.style.setProperty('--stickyTop', Math.ceil(bar.getBoundingClientRect().height) + 'px');
+    };
+    app.innerHTML = '<div class="sticky-sentinel" aria-hidden="true"></div>' + html;
+    const topbar = document.querySelector('.topbar');
+    const sentinel = document.querySelector('.sticky-sentinel');
+    if (topbar && sentinel && typeof IntersectionObserver !== 'undefined') {
+      const observer = new IntersectionObserver(([entry]) => {
+        topbar.classList.toggle('floating', !entry.isIntersecting);
+        updateStickyTop();
+      }, { threshold: [0, 1] });
+      observer.observe(sentinel);
+    }
+    const menu = document.getElementById('__codeInfoMenu');
+    if (menu && typeof menu.addEventListener === 'function') {
+      menu.addEventListener('toggle', () => updateStickyTop());
+    }
+    const closeOpenMenu = () => {
+      const openMenu = document.querySelector('details.menu[open]');
+      if (!openMenu) return;
+      openMenu.removeAttribute('open');
+      updateStickyTop();
+    };
+    document.addEventListener('pointerdown', (event) => {
+      const openMenu = document.querySelector('details.menu[open]');
+      if (!openMenu) return;
+      if (event.target instanceof Node && openMenu.contains(event.target)) return;
+      closeOpenMenu();
+    }, { capture: true });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeOpenMenu();
+      }
+    });
+    window.addEventListener('scroll', () => closeOpenMenu(), { passive: true });
+    updateStickyTop();
+    window.addEventListener('resize', updateStickyTop, { passive: true });
     initCharts();
     document.addEventListener('click', (event) => {
       const element = event.target.closest('[data-command]');
@@ -961,6 +1391,10 @@ ${echartsScript}
         line: Number.isFinite(line) ? line : undefined,
         character: Number.isFinite(character) ? character : undefined
       });
+      const menuHost = element.closest('details.menu');
+      if (menuHost && menuHost.hasAttribute('open')) {
+        closeOpenMenu();
+      }
     });
   </script>
 </body>
