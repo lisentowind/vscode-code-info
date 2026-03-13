@@ -4,10 +4,11 @@ import type { DashboardData, PresentationMode } from '../types';
 export function getEmptyStateHtml(
   webview: vscode.Webview,
   compact: boolean,
-  options?: { showOpenPanel?: boolean }
+  options?: { showOpenPanel?: boolean; cssUri?: string }
 ): string {
   const nonce = getNonce();
   const showOpenPanel = options?.showOpenPanel ?? true;
+  const cssUri = options?.cssUri;
   const title = compact ? 'Code Info 侧边栏' : 'Code Info';
   const subtitle = compact ? '先切到插件加载今日统计，再按需执行项目分析。' : '先切到插件加载今日统计，再打开完整项目分析看板。';
   const openPanelButton = showOpenPanel ? '<button class="action secondary" data-command="openPanel">打开看板</button>' : '';
@@ -18,158 +19,7 @@ export function getEmptyStateHtml(
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    :root {
-      color-scheme: light dark;
-      --bg: var(--vscode-editor-background);
-      --panel: var(--vscode-sideBar-background);
-      --text: var(--vscode-editor-foreground);
-      --muted: var(--vscode-descriptionForeground);
-      --accent: var(--vscode-textLink-foreground);
-      --border-soft: color-mix(in srgb, var(--vscode-panel-border) 84%, var(--accent) 16%);
-      --border: color-mix(in srgb, var(--vscode-panel-border) 72%, var(--accent) 28%);
-      --surface: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
-      --surface-hover: color-mix(in srgb, var(--panel) 86%, var(--accent) 14%);
-      font-family: var(--vscode-font-family);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background:
-        radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 10%, transparent), transparent 28%),
-        radial-gradient(circle at left center, color-mix(in srgb, var(--accent) 7%, transparent), transparent 24%),
-        repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 1.6%, transparent) 0, color-mix(in srgb, var(--accent) 1.6%, transparent) 1px, transparent 1px, transparent 44px),
-        var(--bg);
-      color: var(--text);
-      overflow-x: hidden;
-    }
-    .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
-    .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      padding: 0;
-      background: transparent;
-    }
-    .sticky-sentinel { height: 1px; }
-    .topbar-inner {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      width: 100%;
-      margin: 0 auto;
-      padding: ${compact ? '10px 12px' : '14px 18px'};
-      border-radius: 0;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 78%, transparent), color-mix(in srgb, var(--panel) 90%, transparent));
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--border-soft) 72%, transparent) inset,
-        0 10px 20px color-mix(in srgb, black 10%, transparent);
-      backdrop-filter: saturate(120%) blur(10px);
-      transition:
-        width 220ms cubic-bezier(0.2, 0.9, 0.2, 1),
-        border-radius 220ms cubic-bezier(0.2, 0.9, 0.2, 1),
-        box-shadow 220ms ease,
-        background 220ms ease;
-      will-change: width, border-radius, box-shadow, background;
-    }
-	    .topbar.floating .topbar-inner {
-	      width: min(1160px, calc(100% - 24px));
-	      border-radius: 18px;
-	      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 64%, transparent), color-mix(in srgb, var(--panel) 82%, transparent));
-	      box-shadow:
-	        0 0 0 1px color-mix(in srgb, var(--border-soft) 78%, transparent) inset,
-	        0 16px 36px color-mix(in srgb, black 14%, transparent);
-	    }
-	    body.compact .topbar.floating .topbar-inner {
-	      width: 100%;
-	      border-radius: 0;
-	      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 78%, transparent), color-mix(in srgb, var(--panel) 90%, transparent));
-	      box-shadow:
-	        0 0 0 1px color-mix(in srgb, var(--border-soft) 72%, transparent) inset,
-	        0 10px 20px color-mix(in srgb, black 10%, transparent);
-	    }
-	    @media (prefers-reduced-motion: reduce) {
-	      .topbar-inner { transition: none; }
-	    }
-    .brand { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 10px; align-items: start; min-width: 0; }
-    .brand-title { font-size: ${compact ? '14px' : '16px'}; font-weight: 600; line-height: 1.25; margin: 0; }
-    .brand-sub { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
-    .brand-sub strong { color: var(--text); font-weight: 600; }
-    .ui-icon { width: 16px; height: 16px; display: grid; place-items: center; line-height: 0; margin-top: 2px; color: var(--accent); }
-    .ui-icon svg { width: 16px; height: 16px; display: block; }
-    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
-    .action {
-      border: 1px solid color-mix(in srgb, var(--vscode-button-border, var(--border-soft)) 70%, var(--accent) 30%);
-      border-radius: 10px;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--vscode-button-background) 92%, white 8%), var(--vscode-button-background));
-      color: var(--vscode-button-foreground);
-      padding: 8px 12px;
-      cursor: pointer;
-      font: inherit;
-      font-size: 13px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
-    }
-    .action:hover { transform: translateY(-1px); border-color: var(--border); box-shadow: 0 10px 22px color-mix(in srgb, black 14%, transparent); }
-    .action.secondary { background: color-mix(in srgb, var(--panel) 72%, transparent); color: var(--accent); border-color: var(--border-soft); }
-    .action[disabled] { cursor: not-allowed; opacity: 0.55; transform: none; box-shadow: none; }
-    .page { padding: ${compact ? '12px' : '18px'}; display: grid; gap: 14px; }
-    .panel {
-      position: relative;
-      border: 1px solid var(--border-soft);
-      border-radius: 16px;
-      padding: ${compact ? '14px' : '18px'};
-      background: linear-gradient(180deg, var(--surface), var(--panel));
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--text) 3%, transparent) inset,
-        0 14px 28px color-mix(in srgb, black 12%, transparent);
-      overflow: hidden;
-    }
-    .panel::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 35%);
-      opacity: 0.4;
-    }
-    .empty-hero { display: grid; grid-template-columns: ${compact ? '1fr' : '160px minmax(0,1fr)'}; gap: 14px; align-items: center; }
-    .empty-art {
-      width: ${compact ? '100%' : '160px'};
-      height: ${compact ? '88px' : '120px'};
-      border-radius: 14px;
-      border: 1px solid color-mix(in srgb, var(--border-soft) 72%, transparent);
-      background:
-        radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 50%),
-        radial-gradient(circle at 70% 60%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 52%),
-        repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent) 5%, transparent) 0, color-mix(in srgb, var(--accent) 5%, transparent) 1px, transparent 1px, transparent 12px),
-        color-mix(in srgb, var(--panel) 80%, transparent);
-      box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 14%, transparent);
-    }
-    .empty-title { display: grid; grid-template-columns: 16px minmax(0,1fr); align-items: center; column-gap: 10px; margin-bottom: 6px; }
-    .empty-title h1 { margin: 0; font-size: ${compact ? '16px' : '18px'}; line-height: 1.25; }
-    .empty-body p { margin: 0 0 14px; color: var(--muted); line-height: 1.55; font-size: 13px; }
-    .steps { display: grid; gap: 10px; }
-    .step {
-      border: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
-      border-radius: 12px;
-      padding: 12px 14px;
-      background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%);
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: center;
-    }
-    .step-text { min-width: 0; }
-    .step-title { font-weight: 600; margin: 0 0 2px; font-size: 13px; }
-    .step-desc { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
-    .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
-    @media (max-width: 420px) { .empty-hero { grid-template-columns: 1fr; } }
-  </style>
+  ${cssUri ? `<link rel="stylesheet" href="${cssUri}" />` : ''}
 </head>
 <body class="${compact ? 'compact' : ''}">
   <div class="shell">
@@ -262,10 +112,11 @@ export function getDashboardHtml(
   webview: vscode.Webview,
   data: DashboardData,
   presentation: PresentationMode,
-  resources?: { echartsUri?: string }
+  resources?: { echartsUri?: string; cssUri?: string }
 ): string {
   const nonce = getNonce();
   const echartsScript = resources?.echartsUri ? `  <script nonce="${nonce}" src="${resources.echartsUri}"></script>` : '';
+  const cssLink = resources?.cssUri ? `  <link rel="stylesheet" href="${resources.cssUri}" />` : '';
   const payload = JSON.stringify({ data, presentation })
     .replace(/</g, '\\u003c')
     .replace(/\u2028/g, '\\u2028')
@@ -278,441 +129,7 @@ export function getDashboardHtml(
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Code Info</title>
-  <style>
-    :root {
-      color-scheme: light dark;
-      --bg: var(--vscode-editor-background);
-      --panel: var(--vscode-sideBar-background);
-      --panel-2: color-mix(in srgb, var(--panel) 88%, white 12%);
-      --border: color-mix(in srgb, var(--vscode-panel-border) 72%, var(--accent) 28%);
-      --border-soft: color-mix(in srgb, var(--vscode-panel-border) 84%, var(--accent) 16%);
-      --text: var(--vscode-editor-foreground);
-      --muted: var(--vscode-descriptionForeground);
-      --accent: var(--vscode-textLink-foreground);
-      --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
-      --panel-glow: color-mix(in srgb, var(--accent) 10%, transparent);
-      --surface: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%);
-      --surface-hover: color-mix(in srgb, var(--panel) 86%, var(--accent) 14%);
-      --stickyTop: 64px;
-      font-family: var(--vscode-font-family);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      padding: 0;
-      background:
-        radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 10%, transparent), transparent 28%),
-        radial-gradient(circle at left center, color-mix(in srgb, var(--accent) 7%, transparent), transparent 24%),
-        repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 1.6%, transparent) 0, color-mix(in srgb, var(--accent) 1.6%, transparent) 1px, transparent 1px, transparent 44px),
-        var(--bg);
-      color: var(--text);
-      overflow-x: hidden;
-    }
-    body.compact { --stickyTop: 52px; }
-    .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
-    .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      padding: 0;
-      background: transparent;
-    }
-    .sticky-sentinel { height: 1px; }
-    .topbar-inner {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      flex-wrap: wrap;
-      width: 100%;
-      margin: 0 auto;
-      padding: 14px 20px;
-      border-radius: 0;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 78%, transparent), color-mix(in srgb, var(--panel) 90%, transparent));
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--border-soft) 72%, transparent) inset,
-        0 10px 20px color-mix(in srgb, black 10%, transparent);
-      backdrop-filter: saturate(120%) blur(10px);
-      transition:
-        width 240ms cubic-bezier(0.2, 0.9, 0.2, 1),
-        border-radius 240ms cubic-bezier(0.2, 0.9, 0.2, 1),
-        box-shadow 240ms ease,
-        background 240ms ease;
-      will-change: width, border-radius, box-shadow, background;
-    }
-	    .topbar.floating .topbar-inner {
-	      width: min(1160px, calc(100% - 24px));
-	      border-radius: 18px;
-	      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 64%, transparent), color-mix(in srgb, var(--panel) 84%, transparent));
-	      box-shadow:
-	        0 0 0 1px color-mix(in srgb, var(--border-soft) 78%, transparent) inset,
-	        0 16px 36px color-mix(in srgb, black 14%, transparent);
-	    }
-	    body.compact .topbar.floating .topbar-inner {
-	      width: 100%;
-	      border-radius: 0;
-	      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 78%, transparent), color-mix(in srgb, var(--panel) 90%, transparent));
-	      box-shadow:
-	        0 0 0 1px color-mix(in srgb, var(--border-soft) 72%, transparent) inset,
-	        0 10px 20px color-mix(in srgb, black 10%, transparent);
-	    }
-	    body.compact .topbar-inner { padding: 10px 12px; }
-	    @media (prefers-reduced-motion: reduce) {
-	      .topbar-inner { transition: none; }
-	    }
-    .brand { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
-    .brand-text { min-width: 0; }
-    .brand-title { font-size: 16px; font-weight: 600; line-height: 1.25; }
-    body.compact .brand-title { font-size: 14px; }
-    .brand-sub { margin-top: 4px; color: var(--muted); line-height: 1.5; font-size: 12px; }
-    body.compact .brand-sub { display: none; }
-    .brand-meta { margin-top: 6px; color: var(--muted); line-height: 1.5; font-size: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-    .meta-item { display: inline-flex; gap: 6px; align-items: center; }
-    .meta-item strong { color: var(--text); font-weight: 600; }
-    .meta-dot { width: 4px; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 70%, transparent); opacity: 0.9; }
-    .topbar.floating .brand-sub { display: none; }
-    .topbar.floating .brand-meta { margin-top: 4px; }
-    .topbar-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
-    .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
-    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
-    .toolbar-divider { width: 1px; height: 22px; background: color-mix(in srgb, var(--border-soft) 60%, transparent); opacity: 0.7; }
-    .menu { position: relative; }
-    .menu > summary { list-style: none; }
-    .menu > summary::-webkit-details-marker { display: none; }
-    .menu-popover {
-      position: absolute;
-      top: calc(100% + 10px);
-      right: 0;
-      width: min(320px, calc(100vw - 32px));
-      padding: 10px;
-      border-radius: 14px;
-      border: 1px solid color-mix(in srgb, var(--border-soft) 80%, transparent);
-      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 70%, transparent), color-mix(in srgb, var(--panel) 86%, transparent));
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--text) 3%, transparent) inset,
-        0 16px 36px color-mix(in srgb, black 16%, transparent);
-      backdrop-filter: saturate(120%) blur(12px);
-      transform-origin: top right;
-      transform: translateY(-6px) scale(0.98);
-      opacity: 0;
-      pointer-events: none;
-      transition: transform 160ms ease, opacity 160ms ease;
-      z-index: 50;
-    }
-    details.menu[open] .menu-popover { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
-    .menu-group { padding: 8px; border-radius: 12px; }
-    .menu-group + .menu-group { margin-top: 8px; border-top: 1px solid color-mix(in srgb, var(--border-soft) 65%, transparent); }
-    .menu-title { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 2px 2px 8px; }
-    .menu-item {
-      width: 100%;
-      border: 1px solid color-mix(in srgb, var(--border-soft) 65%, transparent);
-      border-radius: 12px;
-      padding: 10px 10px;
-      background: color-mix(in srgb, var(--panel) 78%, transparent);
-      color: var(--text);
-      cursor: pointer;
-      font: inherit;
-      font-size: 13px;
-      display: grid;
-      grid-template-columns: 18px minmax(0, 1fr) auto;
-      align-items: center;
-      column-gap: 10px;
-      transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
-    }
-    .menu-item:hover { background: color-mix(in srgb, var(--panel) 70%, var(--accent) 10%); border-color: var(--border); transform: translateY(-1px); }
-    .menu-item[disabled],
-    .menu-item[disabled]:hover { cursor: not-allowed; opacity: 0.55; transform: none; border-color: color-mix(in srgb, var(--border-soft) 80%, transparent); background: color-mix(in srgb, var(--panel) 82%, transparent); }
-    .menu-item .menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .menu-item .menu-hint { color: var(--muted); font-size: 12px; }
-    .page { display: grid; gap: 16px; padding: 18px 20px 26px; }
-    body.compact .page { padding: 12px; gap: 12px; }
-    .card, .panel {
-      position: relative;
-      border: 1px solid var(--border-soft);
-      border-radius: 14px;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, var(--accent) 6%), var(--panel));
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--text) 3%, transparent) inset,
-        0 10px 20px color-mix(in srgb, black 9%, transparent);
-      min-width: 0;
-      transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
-    }
-    .card::before, .panel::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      pointer-events: none;
-      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 35%);
-      opacity: 0.35;
-    }
-    .card:hover, .panel:hover {
-      border-color: var(--border);
-      background: linear-gradient(180deg, var(--surface-hover), var(--panel));
-      box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent) inset,
-        0 14px 28px color-mix(in srgb, black 12%, transparent);
-    }
-    .title-row, .section-title, .metric-head, .empty-title {
-      display: grid;
-      grid-template-columns: 16px minmax(0, 1fr);
-      align-items: center;
-      column-gap: 10px;
-      min-width: 0;
-    }
-    .ui-icon {
-      width: 16px;
-      height: 16px;
-      min-width: 16px;
-      flex: none;
-      display: grid;
-      place-items: center;
-      line-height: 0;
-      align-self: center;
-      color: var(--accent);
-    }
-    .ui-icon svg {
-      width: 16px;
-      height: 16px;
-      display: block;
-      overflow: visible;
-      transform: none;
-    }
-    .title-row { margin-bottom: 8px; }
-    .section-title h2,
-    .metric-head .metric-label,
-    .title-row h1 { margin: 0; }
-    .title-row h1,
-    .section-title h2,
-    .metric-label,
-    .action,
-    .link-button { line-height: 1.25; }
-    .section-title h2,
-    .title-row h1,
-    .metric-head .metric-label {
-      align-self: center;
-    }
-    .action {
-      border: 1px solid color-mix(in srgb, var(--vscode-button-border, var(--border-soft)) 70%, var(--accent) 30%);
-      border-radius: 8px;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--vscode-button-background) 92%, white 8%), var(--vscode-button-background));
-      color: var(--vscode-button-foreground);
-      padding: 6px 12px;
-      cursor: pointer;
-      font: inherit;
-      font-size: 13px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
-    }
-    .action .ui-icon { width: 14px; height: 14px; min-width: 14px; color: inherit; }
-    .action .ui-icon svg { width: 14px; height: 14px; transform: none; }
-    .action:hover {
-      transform: translateY(-1px);
-      border-color: var(--border);
-      box-shadow: 0 8px 18px color-mix(in srgb, black 12%, transparent);
-    }
-    .action.secondary {
-      background: color-mix(in srgb, var(--panel) 72%, transparent);
-      color: var(--accent);
-      border-color: var(--border-soft);
-    }
-    .action[disabled],
-    .action[disabled]:hover {
-      cursor: not-allowed;
-      opacity: 0.55;
-      transform: none;
-      box-shadow: none;
-      border-color: color-mix(in srgb, var(--border-soft) 90%, transparent);
-    }
-    .badge {
-      border-radius: 999px;
-      padding: 6px 12px;
-      background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--accent) 10%, transparent));
-      color: var(--accent);
-      border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-      font-size: 12px;
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 7%, transparent) inset;
-    }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
-    .card, .panel { padding: 16px; }
-    .metric-head { color: var(--accent); align-items: center; }
-    .metric-head .ui-icon { margin-top: 0; }
-    .metric-label, .metric-value, .metric-sub { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
-    .metric-label { font-size: 12px; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
-    .metric-value {
-      font-size: 24px;
-      font-weight: 600;
-      line-height: 1.25;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-height: calc(1.25em * 2);
-    }
-    .metric-sub { margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.5; }
-    .grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 16px; }
-    .panel h2 { margin: 0 0 6px; font-size: 15px; }
-    .section-note { color: var(--muted); font-size: 12px; margin: 0 0 14px; line-height: 1.5; }
-    .bars, .legend, .git-bars, .authors, .todo-summary, .tree-list { display: grid; gap: 12px; }
-    .bar-row, .git-block { display: grid; gap: 6px; }
-    .bar-head, .legend-item, .author-item, .todo-item, .tree-summary { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-size: 13px; flex-wrap: wrap; min-width: 0; }
-    .bar-track, .mini-track {
-      height: 8px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: color-mix(in srgb, var(--text) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
-    }
-	    .bar-fill, .mini-fill {
-	      height: 100%;
-	      border-radius: inherit;
-	      background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 72%, white 28%), var(--accent));
-	      opacity: 0.92;
-	      box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 16%, transparent);
-	    }
-	    .legend-left span:nth-child(2),
-	    .author-left span:nth-child(2) {
-	      min-width: 0;
-	      overflow: hidden;
-	      text-overflow: ellipsis;
-	      white-space: nowrap;
-	      max-width: 100%;
-	    }
-	    .tree-summary {
-	      flex-wrap: nowrap;
-	    }
-	    .tree-summary > span:first-child {
-	      min-width: 0;
-	      flex: 1;
-	      overflow: hidden;
-	      text-overflow: ellipsis;
-	      white-space: nowrap;
-	    }
-	    .tree-summary > span:last-child {
-	      flex: none;
-	      white-space: nowrap;
-	    }
-    .stack {
-      display: flex;
-      height: 14px;
-      overflow: hidden;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--text) 8%, transparent);
-      margin-bottom: 14px;
-      border: 1px solid color-mix(in srgb, var(--border-soft) 70%, transparent);
-    }
-    .legend-left, .author-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
-    .git-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .git-note, .empty-note {
-      padding: 12px;
-      border-radius: 10px;
-      border: 1px dashed var(--border-soft);
-      background: color-mix(in srgb, var(--panel) 90%, var(--accent) 10%);
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .empty-note strong { color: var(--text); font-weight: 600; }
-    .inline-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-    .table-wrap { overflow-x: auto; width: 100%; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
-    th, td {
-      text-align: left;
-      padding: 10px 12px;
-      border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 74%, transparent);
-      vertical-align: middle;
-      transition: background 120ms ease;
-    }
-    tbody tr:hover td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
-    th {
-      color: var(--muted);
-      font-weight: 600;
-      background: color-mix(in srgb, var(--panel) 80%, var(--accent) 20%);
-      position: sticky;
-      top: var(--stickyTop);
-    }
-    td.mono {
-      font-family: var(--vscode-editor-font-family);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 0;
-      min-width: 180px;
-    }
-    .muted { color: var(--muted); }
-    .icon-muted { color: var(--muted); }
-    .link-button {
-      display: block;
-      width: 100%;
-      border: 0;
-      padding: 0;
-      background: transparent;
-      color: var(--accent);
-      cursor: pointer;
-      text-align: left;
-      font: inherit;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      transition: color 120ms ease, transform 120ms ease;
-    }
-    .link-button:hover { color: color-mix(in srgb, var(--accent) 82%, white 18%); transform: translateX(1px); }
-    .file-entry { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .file-icon {
-      width: 16px;
-      height: 16px;
-      min-width: 16px;
-      flex: none;
-      display: grid;
-      place-items: center;
-      line-height: 0;
-      align-self: center;
-    }
-    .file-icon svg { width: 16px; height: 16px; display: block; overflow: visible; transform: none; }
-    details.tree-node {
-      border: 1px solid color-mix(in srgb, var(--border-soft) 72%, transparent);
-      border-radius: 10px;
-      padding: 10px 12px;
-      background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%);
-      transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
-    }
-    details.tree-node:hover {
-      border-color: var(--border);
-      background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent) inset;
-    }
-    details.tree-node > summary { cursor: pointer; list-style: none; }
-    details.tree-node > summary::-webkit-details-marker { display: none; }
-    .tree-children { margin-top: 10px; padding-left: 12px; display: grid; gap: 10px; border-left: 1px dashed color-mix(in srgb, var(--border) 70%, transparent); }
-    .tree-files { margin-top: 10px; display: grid; gap: 8px; }
-    .tree-files-title { font-size: 12px; color: var(--muted); display:flex; justify-content: space-between; gap: 10px; }
-    .tree-file-row { display:flex; align-items:center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--border-soft) 75%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--panel) 92%, transparent); }
-    .tree-file-row .file-entry { min-width: 0; }
-    .tree-file-row .link-button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .tree-more { padding-left: 4px; }
-    body.compact .page { gap: 12px; }
-    body.compact .chips { display: none; }
-    body.compact .topbar-right { width: 100%; justify-content: flex-start; }
-    body.compact .grid, body.compact .git-grid { grid-template-columns: 1fr; }
-    body.compact .cards { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
-    body.compact .metric-value { font-size: 22px; }
-    body.compact .card, body.compact .panel { padding: 14px; }
-    .chart { display: none; width: 100%; height: 220px; margin-top: 8px; }
-    .chart-fallback { display: block; }
-    .panel.chart-ready .chart { display: block; }
-    .panel.chart-ready .chart-fallback { display: none; }
-    body.compact .chart { height: 180px; }
-    @media (max-width: 960px) {
-      .grid, .git-grid { grid-template-columns: 1fr; }
-      .topbar-inner { flex-direction: column; align-items: stretch; }
-      .topbar-right { justify-content: flex-start; }
-    }
-    @media (max-width: 320px) { .cards { grid-template-columns: 1fr; } }
-  </style>
+${cssLink}
 </head>
 <body class="${presentation.compact ? 'compact' : ''}">
   <script nonce="${nonce}" id="__codeInfoPayload" type="application/json">${payload}</script>
@@ -1244,7 +661,60 @@ ${echartsScript}
         '</div>' +
       '</details>';
 
-    let html = '' +
+    const navItems = [];
+    navItems.push('<button class="sidebar-item active" data-nav="ci-section-today">' + icon('today') + '<span>今日统计</span></button>');
+    navItems.push('<button class="sidebar-item" data-nav="ci-section-project">' + icon('project') + '<span>项目分析</span></button>');
+    if (projectStats) {
+      navItems.push('<button class="sidebar-item" data-nav="ci-section-tree">' + icon('tree') + '<span>目录树</span></button>');
+      navItems.push('<button class="sidebar-item" data-nav="ci-section-git">' + icon('git') + '<span>Git 趋势</span></button>');
+      navItems.push('<button class="sidebar-item" data-nav="ci-section-todo">' + icon('todo') + '<span>待办热点</span></button>');
+      navItems.push('<button class="sidebar-item" data-nav="ci-section-tables">' + icon('language') + '<span>统计明细</span></button>');
+    }
+
+    const sidebarSummaryItems = [];
+    if (todayStats) {
+      sidebarSummaryItems.push(
+        '<div class="sidebar-chip">' + icon('files') +
+          '<div class="sidebar-chip-label">今日变更</div>' +
+          '<div class="sidebar-chip-value">' + numberFormat(todayStats.totals.touchedFiles) + '</div>' +
+          '<div class="sidebar-chip-sub">新增 ' + numberFormat(todayStats.totals.newFiles) + ' · 删除 ' + numberFormat(todayStats.totals.deletedFiles) + '</div>' +
+        '</div>'
+      );
+    }
+    if (projectStats) {
+      sidebarSummaryItems.push(
+        '<div class="sidebar-chip">' + icon('project') +
+          '<div class="sidebar-chip-label">项目文件</div>' +
+          '<div class="sidebar-chip-value">' + numberFormat(projectStats.totals.files) + '</div>' +
+          '<div class="sidebar-chip-sub">耗时 ' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '</div>' +
+        '</div>'
+      );
+    }
+
+    const sidebarHtml = !presentation.compact
+      ? '<aside class="sidebar">' +
+          '<div class="sidebar-header"><div class="sidebar-title">Code Info</div></div>' +
+          '<div class="sidebar-section">' +
+            '<div class="sidebar-section-title">Actions</div>' +
+            '<div class="sidebar-actions">' +
+              quickActionsHtml +
+              menuHtml +
+            '</div>' +
+          '</div>' +
+          (sidebarSummaryItems.length ? (
+            '<div class="sidebar-section">' +
+              '<div class="sidebar-section-title">Summary</div>' +
+              '<div class="sidebar-chips">' + sidebarSummaryItems.join('') + '</div>' +
+            '</div>'
+          ) : '') +
+          '<div class="sidebar-section">' +
+            '<div class="sidebar-section-title">Navigation</div>' +
+            '<div class="sidebar-list">' + navItems.join('') + '</div>' +
+          '</div>' +
+        '</aside>'
+      : '';
+
+    const topbarHtml = '' +
       '<header class="topbar">' +
         '<div class="topbar-inner">' +
           '<div class="brand">' +
@@ -1255,17 +725,23 @@ ${echartsScript}
               '<div class="brand-meta">' + metaHtml + '</div>' +
             '</div>' +
           '</div>' +
-          '<div class="topbar-right">' +
-            '<div class="chips">' + chipsHtml + '</div>' +
-            '<div class="toolbar">' + quickActionsHtml + menuHtml + '</div>' +
-          '</div>' +
+          (presentation.compact
+            ? ('<div class="topbar-right">' +
+                '<div class="chips">' + chipsHtml + '</div>' +
+                '<div class="toolbar">' + quickActionsHtml + menuHtml + '</div>' +
+              '</div>')
+            : '') +
         '</div>' +
-      '</header>' +
-      '<main class="page">';
+      '</header>';
+
+    let html = '' +
+      (presentation.compact
+        ? (topbarHtml + '<main class="page">')
+        : ('<div class="app-layout">' + sidebarHtml + '<div class="content">' + topbarHtml + '<main class="page">'));
 
     if (todayStats) {
       html += '' +
-        '<section class="panel"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="section-note">新增/修改基于文件时间戳；删除文件与增删行（如有）基于 Git 今日提交。</div></section>' +
+        '<section class="panel" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="section-note">新增/修改基于文件时间戳；删除文件与增删行（如有）基于 Git 今日提交。</div></section>' +
         '<section class="cards">' +
           metricCard('今日变更文件', numberFormat(todayStats.totals.touchedFiles), '今天被修改或新增的文本文件', 'files') +
           metricCard('今日新增文件', numberFormat(todayStats.totals.newFiles), '通过文件创建时间判断的新文件', 'newFile') +
@@ -1291,12 +767,12 @@ ${echartsScript}
         (todayStats.totals.todoCount > 0 ? ('<section class="panel"><div class="section-title">' + icon('todo') + '<h2>今日待办清单</h2></div><div class="section-note">展示部分 TODO / FIXME / HACK 位置，点击可跳转到对应行。</div>' + renderTodoLocations(todayStats.todoLocations, '今日变更文件中未发现待办标记。') + '</section>') : '') +
         '<section class="panel"><div class="section-title">' + icon('deletedFile') + '<h2>今日删除文件</h2></div><div class="section-note">' + (todayStats.analysisMeta.gitAvailable ? '基于 Git 今日提交，仅展示文件路径。' : '当前工作区没有可用的 Git 数据，无法统计删除文件。') + '</div>' + renderDeletedFiles(todayStats.deletedFiles, '今天还没有检测到删除文件。') + '</section>';
     } else {
-      html += '<section class="panel"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="empty-note">当前还没有今日统计数据。切到插件时会自动刷新，也可以手动点击“刷新今日统计”。</div></section>';
+      html += '<section class="panel" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="empty-note">当前还没有今日统计数据。切到插件时会自动刷新，也可以手动点击“刷新今日统计”。</div></section>';
     }
 
     if (!presentation.compact && projectStats) {
       html += '' +
-        '<section class="panel"><div class="section-title">' + icon('project') + '<h2>项目分析模块</h2></div><div class="section-note">手动触发的全量项目分析，适合看整体代码规模、目录结构和 Git 活动。</div></section>' +
+        '<section class="panel" id="ci-section-project"><div class="section-title">' + icon('project') + '<h2>项目分析模块</h2></div><div class="section-note">手动触发的全量项目分析，适合看整体代码规模、目录结构和 Git 活动。</div></section>' +
         '<section class="cards">' +
           metricCard('总文件数', numberFormat(projectStats.totals.files), '参与统计的文本文件', 'files') +
           metricCard('代码行', numberFormat(projectStats.totals.codeLines), '有效代码规模', 'lines') +
@@ -1315,15 +791,15 @@ ${echartsScript}
           '<div class="panel"><div class="section-title">' + icon('module') + '<h2>模块代码量排行</h2></div><div class="section-note">按目录深度聚合（支持 hover 查看详情）。</div><div class="chart" id="chart-module"></div><div class="bars chart-fallback">' + renderBarList(projectStats.directories.slice(0, presentation.compact ? 6 : 8), 'path', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无模块数据') + '</div></div>' +
           '<div class="panel"><div class="section-title">' + icon('todo') + '<h2>待办摘要</h2></div><div class="section-note">仅统计注释中的 TODO / FIXME / HACK 标记。</div>' + renderTodoSummary(projectStats.todoSummary) + '</div>' +
         '</section>' +
-        '<section class="panel"><div class="section-title">' + icon('tree') + '<h2>模块目录树</h2></div><div class="section-note">支持逐层展开到最深目录，并展示当前目录下的文件（点击文件名可打开）。</div>' + renderTreeNodes(projectStats.directoryTree, 0) + '</section>' +
-        '<section class="panel"><div class="section-title">' + icon('git') + '<h2>Git 提交趋势</h2></div><div class="section-note">基于当前工作区首个目录的 Git 历史。</div>' + renderGitStats(projectStats) + '</section>' +
-        '<section class="panel"><div class="section-title">' + icon('todo') + '<h2>待办热点文件</h2></div><div class="section-note">点击文件名可直接打开源码定位待办。</div>' + renderTodoHotspots(projectStats.todoHotspots) + '</section>' +
+        '<section class="panel" id="ci-section-tree"><div class="section-title">' + icon('tree') + '<h2>模块目录树</h2></div><div class="section-note">支持逐层展开到最深目录，并展示当前目录下的文件（点击文件名可打开）。</div>' + renderTreeNodes(projectStats.directoryTree, 0) + '</section>' +
+        '<section class="panel" id="ci-section-git"><div class="section-title">' + icon('git') + '<h2>Git 提交趋势</h2></div><div class="section-note">基于当前工作区首个目录的 Git 历史。</div>' + renderGitStats(projectStats) + '</section>' +
+        '<section class="panel" id="ci-section-todo"><div class="section-title">' + icon('todo') + '<h2>待办热点文件</h2></div><div class="section-note">点击文件名可直接打开源码定位待办。</div>' + renderTodoHotspots(projectStats.todoHotspots) + '</section>' +
         (projectStats.insights.totalTodoCount > 0 ? ('<section class="panel"><div class="section-title">' + icon('todo') + '<h2>待办位置清单</h2></div><div class="section-note">展示部分 TODO / FIXME / HACK 位置，点击可跳转到对应行。</div>' + renderTodoLocations(projectStats.todoLocations, '未发现待办标记。') + '</section>') : '') +
-        '<section class="panel"><div class="section-title">' + icon('language') + '<h2>语言统计明细</h2></div><div class="table-wrap"><table><thead><tr><th>语言</th><th>文件数</th><th>代码行</th><th>体积</th><th>待办数</th></tr></thead><tbody>' + renderLanguageTable(projectStats.languages) + '</tbody></table></div></section>' +
+        '<section class="panel" id="ci-section-tables"><div class="section-title">' + icon('language') + '<h2>语言统计明细</h2></div><div class="table-wrap"><table><thead><tr><th>语言</th><th>文件数</th><th>代码行</th><th>体积</th><th>待办数</th></tr></thead><tbody>' + renderLanguageTable(projectStats.languages) + '</tbody></table></div></section>' +
         '<section class="panel"><div class="section-title">' + icon('files') + '<h2>最大文件排行</h2></div><div class="section-note">点击文件名可直接打开源码。</div><div class="table-wrap"><table><thead><tr><th>文件</th><th>语言</th><th>总行数</th><th>代码行</th><th>待办数</th></tr></thead><tbody>' + renderLargestFiles(projectStats.largestFiles) + '</tbody></table></div></section>';
     } else if (!presentation.compact) {
       html += '' +
-        '<section class="panel">' +
+        '<section class="panel" id="ci-section-project">' +
           '<div class="section-title">' + icon('project') + '<h2>项目分析模块</h2></div>' +
           '<div class="empty-note">' +
             '<strong>还没有项目分析结果</strong><br>' +
@@ -1336,11 +812,17 @@ ${echartsScript}
         '</section>';
     }
 
-    html += '</main>';
+    html += (presentation.compact ? '</main>' : '</main></div></div>');
     const updateStickyTop = () => {
-      const bar = document.querySelector('.topbar');
-      if (!bar) return;
-      document.body.style.setProperty('--stickyTop', Math.ceil(bar.getBoundingClientRect().height) + 'px');
+      const bar = document.querySelector('.topbar-inner') || document.querySelector('.topbar');
+      if (!(bar instanceof HTMLElement)) return;
+      const rect = bar.getBoundingClientRect();
+      const height = bar.offsetHeight || rect.height || 0;
+      const bottom = Math.max(rect.top + height, rect.bottom, height);
+      document.body.style.setProperty('--stickyTop', Math.max(0, Math.round(bottom)) + 'px');
+    };
+    const scheduleStickyTop = () => {
+      requestAnimationFrame(() => requestAnimationFrame(() => updateStickyTop()));
     };
     app.innerHTML = '<div class="sticky-sentinel" aria-hidden="true"></div>' + html;
     const topbar = document.querySelector('.topbar');
@@ -1348,36 +830,66 @@ ${echartsScript}
     if (topbar && sentinel && typeof IntersectionObserver !== 'undefined') {
       const observer = new IntersectionObserver(([entry]) => {
         topbar.classList.toggle('floating', !entry.isIntersecting);
-        updateStickyTop();
+        scheduleStickyTop();
       }, { threshold: [0, 1] });
       observer.observe(sentinel);
     }
-    const menu = document.getElementById('__codeInfoMenu');
-    if (menu && typeof menu.addEventListener === 'function') {
-      menu.addEventListener('toggle', () => updateStickyTop());
+    const topbarInner = document.querySelector('.topbar-inner');
+    if (topbarInner && typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => scheduleStickyTop());
+      ro.observe(topbarInner);
     }
+    const menu = document.getElementById('__codeInfoMenu');
+    let isMenuOpen = false;
     const closeOpenMenu = () => {
-      const openMenu = document.querySelector('details.menu[open]');
-      if (!openMenu) return;
-      openMenu.removeAttribute('open');
-      updateStickyTop();
+      if (!(menu instanceof HTMLDetailsElement)) return;
+      if (!isMenuOpen) return;
+      menu.open = false;
+      isMenuOpen = false;
+      scheduleStickyTop();
     };
+    if (menu instanceof HTMLDetailsElement) {
+      isMenuOpen = menu.open;
+      menu.addEventListener('toggle', () => {
+        isMenuOpen = menu.open;
+        scheduleStickyTop();
+      });
+    }
     document.addEventListener('pointerdown', (event) => {
-      const openMenu = document.querySelector('details.menu[open]');
-      if (!openMenu) return;
-      if (event.target instanceof Node && openMenu.contains(event.target)) return;
+      if (!(menu instanceof HTMLDetailsElement)) return;
+      if (!isMenuOpen) return;
+      if (event.target instanceof Node && menu.contains(event.target)) return;
       closeOpenMenu();
     }, { capture: true });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        closeOpenMenu();
-      }
+      if (event.key === 'Escape') closeOpenMenu();
     });
-    window.addEventListener('scroll', () => closeOpenMenu(), { passive: true });
-    updateStickyTop();
-    window.addEventListener('resize', updateStickyTop, { passive: true });
+    window.addEventListener('scroll', () => {
+      if (!isMenuOpen) return;
+      closeOpenMenu();
+    }, { passive: true });
+    scheduleStickyTop();
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => scheduleStickyTop()).catch(() => {});
+    }
+    window.addEventListener('load', () => scheduleStickyTop(), { once: true });
+    window.addEventListener('resize', () => scheduleStickyTop(), { passive: true });
     initCharts();
     document.addEventListener('click', (event) => {
+      const navElement = event.target.closest('[data-nav]');
+      if (navElement) {
+        const targetId = navElement.getAttribute('data-nav');
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          for (const item of document.querySelectorAll('.sidebar-item.active')) {
+            item.classList.remove('active');
+          }
+          navElement.classList.add('active');
+        }
+        return;
+      }
+
       const element = event.target.closest('[data-command]');
       if (!element) return;
       if (element.hasAttribute('disabled')) return;
@@ -1391,8 +903,7 @@ ${echartsScript}
         line: Number.isFinite(line) ? line : undefined,
         character: Number.isFinite(character) ? character : undefined
       });
-      const menuHost = element.closest('details.menu');
-      if (menuHost && menuHost.hasAttribute('open')) {
+      if (element.closest('details.menu')) {
         closeOpenMenu();
       }
     });

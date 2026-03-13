@@ -93,7 +93,10 @@ export function showDashboardEmptyPanel(
 
   state.panel.title = 'Code Info · Dashboard';
   applyPanelIcon(state.panel, extensionUri);
-  state.panel.webview.html = getEmptyStateHtml(state.panel.webview, false, { showOpenPanel: false });
+  state.panel.webview.html = getEmptyStateHtml(state.panel.webview, false, {
+    showOpenPanel: false,
+    cssUri: getCssUri(state.panel.webview, extensionUri)
+  });
   state.panel.reveal(vscode.ViewColumn.One, false);
 }
 
@@ -101,7 +104,10 @@ export function showEmptyIfOpen(state: DashboardPanelState): void {
   if (!state.panel) {
     return;
   }
-  state.panel.webview.html = getEmptyStateHtml(state.panel.webview, false, { showOpenPanel: false });
+  state.panel.webview.html = getEmptyStateHtml(state.panel.webview, false, {
+    showOpenPanel: false,
+    cssUri: getCssUri(state.panel.webview, state.extensionUri)
+  });
 }
 
 function renderPanel(panel: vscode.WebviewPanel, data: DashboardData, extensionUri?: vscode.Uri): void {
@@ -113,7 +119,10 @@ function renderPanel(panel: vscode.WebviewPanel, data: DashboardData, extensionU
   };
 
   const echartsUri = getEchartsUri(panel.webview, extensionUri);
-  panel.webview.html = getDashboardHtml(panel.webview, data, presentation, { echartsUri });
+  panel.webview.html = getDashboardHtml(panel.webview, data, presentation, {
+    echartsUri,
+    cssUri: getCssUri(panel.webview, extensionUri)
+  });
 }
 
 function applyPanelIcon(panel: vscode.WebviewPanel, extensionUri?: vscode.Uri): void {
@@ -130,4 +139,11 @@ function getEchartsUri(webview: vscode.Webview, extensionUri?: vscode.Uri): stri
     return undefined;
   }
   return webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'vendor', 'echarts.min.js')).toString();
+}
+
+function getCssUri(webview: vscode.Webview, extensionUri?: vscode.Uri): string | undefined {
+  if (!extensionUri) {
+    return undefined;
+  }
+  return webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview', 'macos26.css')).toString();
 }
