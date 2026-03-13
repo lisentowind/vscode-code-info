@@ -506,7 +506,7 @@ export function getDashboardHtml(
       gap: 8px;
       transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
     }
-    .action .ui-icon { width: 14px; height: 14px; min-width: 14px; }
+    .action .ui-icon { width: 14px; height: 14px; min-width: 14px; color: inherit; }
     .action .ui-icon svg { width: 14px; height: 14px; transform: none; }
     .action:hover {
       transform: translateY(-1px);
