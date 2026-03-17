@@ -662,55 +662,69 @@ ${echartsScript}
       '</details>';
 
     const navItems = [];
-    navItems.push('<button class="sidebar-item active" data-nav="ci-section-today">' + icon('today') + '<span>今日统计</span></button>');
-    navItems.push('<button class="sidebar-item" data-nav="ci-section-project">' + icon('project') + '<span>项目分析</span></button>');
+    navItems.push('<button class="nav-item active" data-nav="ci-section-today" data-label="今日统计" aria-label="今日统计">' + icon('today') + '<span class="nav-text">今日统计</span></button>');
+    navItems.push('<button class="nav-item" data-nav="ci-section-project" data-label="项目分析" aria-label="项目分析">' + icon('project') + '<span class="nav-text">项目分析</span></button>');
     if (projectStats) {
-      navItems.push('<button class="sidebar-item" data-nav="ci-section-tree">' + icon('tree') + '<span>目录树</span></button>');
-      navItems.push('<button class="sidebar-item" data-nav="ci-section-git">' + icon('git') + '<span>Git 趋势</span></button>');
-      navItems.push('<button class="sidebar-item" data-nav="ci-section-todo">' + icon('todo') + '<span>待办热点</span></button>');
-      navItems.push('<button class="sidebar-item" data-nav="ci-section-tables">' + icon('language') + '<span>统计明细</span></button>');
+      navItems.push('<button class="nav-item" data-nav="ci-section-tree" data-label="目录树" aria-label="目录树">' + icon('tree') + '<span class="nav-text">目录树</span></button>');
+      navItems.push('<button class="nav-item" data-nav="ci-section-git" data-label="Git 趋势" aria-label="Git 趋势">' + icon('git') + '<span class="nav-text">Git 趋势</span></button>');
+      navItems.push('<button class="nav-item" data-nav="ci-section-todo" data-label="待办热点" aria-label="待办热点">' + icon('todo') + '<span class="nav-text">待办热点</span></button>');
+      navItems.push('<button class="nav-item" data-nav="ci-section-tables" data-label="统计明细" aria-label="统计明细">' + icon('language') + '<span class="nav-text">统计明细</span></button>');
     }
 
     const sidebarSummaryItems = [];
     if (todayStats) {
       sidebarSummaryItems.push(
-        '<div class="sidebar-chip">' + icon('files') +
-          '<div class="sidebar-chip-label">今日变更</div>' +
-          '<div class="sidebar-chip-value">' + numberFormat(todayStats.totals.touchedFiles) + '</div>' +
-          '<div class="sidebar-chip-sub">新增 ' + numberFormat(todayStats.totals.newFiles) + ' · 删除 ' + numberFormat(todayStats.totals.deletedFiles) + '</div>' +
+        '<div class="rail-chip" aria-label="今日变更 ' + numberFormat(todayStats.totals.touchedFiles) + ' 文件，新增 ' + numberFormat(todayStats.totals.newFiles) + '，删除 ' + numberFormat(todayStats.totals.deletedFiles) + '">' +
+          icon('files') +
+          '<div class="rail-value">' + numberFormat(todayStats.totals.touchedFiles) + '</div>' +
+          '<div class="rail-text">今日变更</div>' +
         '</div>'
       );
     }
     if (projectStats) {
       sidebarSummaryItems.push(
-        '<div class="sidebar-chip">' + icon('project') +
-          '<div class="sidebar-chip-label">项目文件</div>' +
-          '<div class="sidebar-chip-value">' + numberFormat(projectStats.totals.files) + '</div>' +
-          '<div class="sidebar-chip-sub">耗时 ' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '</div>' +
+        '<div class="rail-chip" aria-label="项目文件 ' + numberFormat(projectStats.totals.files) + '，耗时 ' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '">' +
+          icon('project') +
+          '<div class="rail-value">' + numberFormat(projectStats.totals.files) + '</div>' +
+          '<div class="rail-text">项目文件</div>' +
         '</div>'
       );
     }
 
+    const projectActionCommand = projectStats ? 'refresh' : 'showStats';
+    const projectActionLabel = projectStats ? '重新分析项目' : '开始项目分析';
+    const floatingBarHtml = !presentation.compact
+      ? '' +
+        '<div class="floatbar" aria-label="快捷操作">' +
+          '<button class="fab-button" style="--i:0" data-command="refreshToday" aria-label="刷新今日统计">' +
+            icon('refresh', 'fab-icon') +
+            '<span class="fab-label">刷新今日</span>' +
+          '</button>' +
+          '<button class="fab-button" style="--i:1" data-command="' + projectActionCommand + '" aria-label="' + escapeHtml(projectActionLabel) + '">' +
+            icon('project', 'fab-icon') +
+            '<span class="fab-label">' + escapeHtml(projectActionLabel) + '</span>' +
+          '</button>' +
+          '<button class="fab-button" style="--i:2" data-command="selectScope" aria-label="选择目录">' +
+            icon('scope', 'fab-icon') +
+            '<span class="fab-label">选择目录</span>' +
+          '</button>' +
+          '<button class="fab-button" style="--i:3" data-command="exportJson" aria-label="导出 JSON"' + (projectStats ? '' : ' disabled') + '>' +
+            icon('json', 'fab-icon') +
+            '<span class="fab-label">导出 JSON</span>' +
+          '</button>' +
+          '<button class="fab-button" style="--i:4" data-command="exportCsv" aria-label="导出 CSV"' + (projectStats ? '' : ' disabled') + '>' +
+            icon('csv', 'fab-icon') +
+            '<span class="fab-label">导出 CSV</span>' +
+          '</button>' +
+        '</div>'
+      : '';
+
     const sidebarHtml = !presentation.compact
-      ? '<aside class="sidebar">' +
+      ? '<aside class="sidebar sidebar-simple">' +
           '<div class="sidebar-header"><div class="sidebar-title">Code Info</div></div>' +
-          '<div class="sidebar-section">' +
-            '<div class="sidebar-section-title">Actions</div>' +
-            '<div class="sidebar-actions">' +
-              quickActionsHtml +
-              menuHtml +
-            '</div>' +
-          '</div>' +
-          (sidebarSummaryItems.length ? (
-            '<div class="sidebar-section">' +
-              '<div class="sidebar-section-title">Summary</div>' +
-              '<div class="sidebar-chips">' + sidebarSummaryItems.join('') + '</div>' +
-            '</div>'
-          ) : '') +
-          '<div class="sidebar-section">' +
-            '<div class="sidebar-section-title">Navigation</div>' +
-            '<div class="sidebar-list">' + navItems.join('') + '</div>' +
-          '</div>' +
+          (sidebarSummaryItems.length ? ('<div class="rail-summary" aria-label="Summary">' + sidebarSummaryItems.join('') + '</div>') : '') +
+          '<div class="rail-divider" aria-hidden="true"></div>' +
+          '<div class="rail-nav" aria-label="Navigation">' + navItems.join('') + '</div>' +
         '</aside>'
       : '';
 
@@ -812,7 +826,7 @@ ${echartsScript}
         '</section>';
     }
 
-    html += (presentation.compact ? '</main>' : '</main></div></div>');
+    html += (presentation.compact ? '</main>' : '</main></div></div>' + floatingBarHtml);
     const updateStickyTop = () => {
       const bar = document.querySelector('.topbar-inner') || document.querySelector('.topbar');
       if (!(bar instanceof HTMLElement)) return;
@@ -882,7 +896,7 @@ ${echartsScript}
         const target = targetId ? document.getElementById(targetId) : null;
         if (target) {
           target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          for (const item of document.querySelectorAll('.sidebar-item.active')) {
+          for (const item of document.querySelectorAll('[data-nav].active')) {
             item.classList.remove('active');
           }
           navElement.classList.add('active');
