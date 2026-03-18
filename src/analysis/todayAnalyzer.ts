@@ -107,12 +107,14 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
       bytes: 0,
       todoCount: 0,
       addedLines: 0,
-      deletedLines: 0
+      deletedLines: 0,
+      changedLines: 0
     }
   );
   totals.deletedFiles = deletedFiles.length;
   totals.addedLines = gitChanges.addedLines;
   totals.deletedLines = gitChanges.deletedLines;
+  totals.changedLines = gitChanges.addedLines + gitChanges.deletedLines;
 
   const topLanguage = languages[0];
   const topTouchedFile = sortedTouchedFiles[0];

@@ -142,6 +142,7 @@ export type TodayTotals = {
   todoCount: number;
   addedLines: number;
   deletedLines: number;
+  changedLines: number;
 };
 
 export type TodayInsights = {

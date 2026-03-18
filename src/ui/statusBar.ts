@@ -70,7 +70,7 @@ function createTooltip(todayStats: TodayStats | undefined): vscode.MarkdownStrin
     [
       '$(graph) **今日统计**',
       `今日变更 **${todayStats.totals.touchedFiles}** 个文件，其中新增 **${todayStats.totals.newFiles}** 个，修改 **${modifiedFiles}** 个`,
-      `代码 **${todayStats.totals.codeLines}** 行，待办 **${todayStats.totals.todoCount}** 个，主语言 ${topLanguage}`,
+      `变更 **${todayStats.analysisMeta.gitAvailable ? todayStats.totals.changedLines : 0}** 行（Git 今日提交），待办 **${todayStats.totals.todoCount}** 个，主语言 ${topLanguage}`,
       gitLine,
       `最近文件：${escapeMarkdown(latestFile)}，更新 ${escapeMarkdown(updatedAt)}`,
       '',

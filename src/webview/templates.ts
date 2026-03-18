@@ -761,7 +761,7 @@ ${echartsScript}
           metricCard('今日新增文件', numberFormat(todayStats.totals.newFiles), '通过文件创建时间判断的新文件', 'newFile') +
           metricCard('今日删除文件', numberFormat(todayStats.totals.deletedFiles), '基于 Git 今日提交（如可用）', 'deletedFile') +
           metricCard('今日代码变更', '+' + numberFormat(todayStats.totals.addedLines) + ' / -' + numberFormat(todayStats.totals.deletedLines), '基于 Git 今日提交（如可用）', 'diff') +
-          metricCard('今日代码行', numberFormat(todayStats.totals.codeLines), '仅统计今日变更文件的当前代码量', 'lines') +
+          metricCard('今日变更行', todayStats.analysisMeta.gitAvailable ? numberFormat(todayStats.totals.changedLines) : '—', 'added + deleted（仅统计今日提交）', 'lines') +
           metricCard('今日待办数', numberFormat(todayStats.totals.todoCount), '变更文件中的 TODO / FIXME / HACK', 'todo') +
           metricCard('主力语言', todayStats.insights.topLanguage, percent(todayStats.insights.topLanguageShare, 1) + ' 占比', 'language') +
           metricCard('最近活跃文件', todayStats.insights.topPath, '按更新时间和代码量排序', 'detail') +
