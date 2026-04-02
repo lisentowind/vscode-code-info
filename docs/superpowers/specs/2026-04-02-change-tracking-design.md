@@ -211,7 +211,12 @@
 - `languages` / `directories` 面向统计级变化
 - `analysisMeta` 记录耗时、差异来源、Git 可用性、是否使用自动 base 分支
 
-这样后续扩展“时间区间对比”时，可以继续复用同一页面模型，不需要为了 `baseRef/headRef` 再重开一套类型。
+未来如果扩展到“时间区间对比”，也必须先在内部解析成一个统一的 `snapshot pair`：
+
+- `baseSnapshot`
+- `headSnapshot`
+
+也就是说，`timeRange` 不会拥有另一套结果模型，它只是另一种得到 `snapshot pair` 的方式。这样可以保证 `CompareStats` 持续作为统一的页面结果类型存在，不会为了不同来源再拆出第二套 compare 模型。
 
 ### 文件结果模型
 
@@ -222,12 +227,14 @@
 - `deleted`
 - `renamed`
 - `binary`
+- `submodule`
 
 第一期即使不把每种状态做成复杂交互，也必须先定义展示和降级策略：
 
 - `renamed`
   - 展示旧路径和新路径
-  - 行数变化仍可展示
+  - 如果两侧都是文本文件，则正常进入 `before / after` 文本统计
+  - 计入代码量净变化、语言变化、目录变化、TODO 净变化
 - `binary`
   - 标记为二进制变更
   - 不参与代码量、TODO 等文本级统计
@@ -264,7 +271,8 @@
 - base/head 顺序无效
 - Git 命令执行失败
 - 文件在某一侧不存在
-- 文件是 rename、binary 或 submodule，无法进入常规文本统计
+- 文件是 binary 或 submodule，无法进入常规文本统计
+- rename 文件的一侧内容无法读取或无法按文本处理
 
 错误展示原则：
 
