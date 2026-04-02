@@ -4,6 +4,7 @@ import { collectAnalyzedFiles } from '../analysis/shared';
 import { createPresetDateRange, formatDateRangeLabel } from '../analysis/dateRange';
 import { countTextMetrics } from '../analysis/lineMetrics';
 import { buildDirectorySummaries, buildDirectoryTree } from '../analysis/summaries';
+import { sortTouchedFiles } from '../analysis/todayAnalyzer';
 import { buildWeeklyBuckets, getWeekBucketKey, parseDeletedFilesOutput, parseNumstatOutput } from '../git/common';
 import { createDashboardPanelOptions, getDashboardPanelTitle } from '../ui/panels';
 import type { TextFileAnalysisResult } from '../analysis/fileAnalyzer';
@@ -283,5 +284,40 @@ suite('Extension Test Suite', () => {
       formatDateRangeLabel(new Date(2026, 2, 27, 0, 0, 0, 0), new Date(2026, 3, 2, 23, 59, 59, 999)),
       '2026-03-27 ~ 2026-04-02'
     );
+  });
+
+  test('sortTouchedFiles orders entries by full timestamp before code size', () => {
+    const files = sortTouchedFiles([
+      {
+        resource: 'file:///workspace/a.ts',
+        path: 'a.ts',
+        language: 'typescript',
+        lines: 10,
+        codeLines: 10,
+        commentLines: 0,
+        blankLines: 0,
+        bytes: 100,
+        todoCounts: { total: 0, todo: 0, fixme: 0, hack: 0 },
+        status: 'modified',
+        modifiedAt: '04-01 23:58',
+        modifiedAtTimestamp: new Date(2026, 3, 1, 23, 58).getTime()
+      },
+      {
+        resource: 'file:///workspace/b.ts',
+        path: 'b.ts',
+        language: 'typescript',
+        lines: 6,
+        codeLines: 6,
+        commentLines: 0,
+        blankLines: 0,
+        bytes: 60,
+        todoCounts: { total: 0, todo: 0, fixme: 0, hack: 0 },
+        status: 'modified',
+        modifiedAt: '04-02 08:10',
+        modifiedAtTimestamp: new Date(2026, 3, 2, 8, 10).getTime()
+      }
+    ]);
+
+    assert.deepStrictEqual(files.map((file) => file.path), ['b.ts', 'a.ts']);
   });
 });

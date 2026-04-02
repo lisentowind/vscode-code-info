@@ -180,15 +180,22 @@ async function refreshTodayAndRender(
     return undefined;
   }
 
+  const requestedPreset = options.preset ?? latestRangePreset;
+  latestRangePreset = requestedPreset;
+
   if (refreshTodayTask) {
-    return refreshTodayTask;
+    await refreshTodayTask;
+    if (latestTodayStats?.rangePreset === requestedPreset) {
+      return latestTodayStats;
+    }
+
+    return refreshTodayAndRender(sidebarProvider, statusBar, { ...options, preset: requestedPreset });
   }
 
-  latestRangePreset = options.preset ?? latestRangePreset;
   statusBar.setLoading(true);
   refreshTodayTask = (async () => {
     try {
-      const stats = await analyzeRangeWorkspace(latestRangePreset, outputChannel);
+      const stats = await analyzeRangeWorkspace(requestedPreset, outputChannel);
       latestTodayStats = stats;
       sidebarProvider.render(getDashboardData());
       statusBar.update(latestTodayStats);

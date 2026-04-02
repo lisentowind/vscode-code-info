@@ -124,6 +124,7 @@ export type WorkspaceStats = {
 export type TodayFileStat = FileStat & {
   status: 'new' | 'modified';
   modifiedAt: string;
+  modifiedAtTimestamp: number;
 };
 
 export type TodayDeletedFile = {

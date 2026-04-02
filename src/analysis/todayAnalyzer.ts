@@ -10,7 +10,7 @@ import { buildLanguageSummaries } from './summaries';
 
 type FileTimestampStatus =
   | { kind: 'skip' }
-  | { kind: 'touch'; status: 'new' | 'modified'; modifiedAt: string };
+  | { kind: 'touch'; status: 'new' | 'modified'; modifiedAt: string; modifiedAtTimestamp: number };
 
 export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats> {
   return analyzeRangeWorkspace('today', logger);
@@ -51,21 +51,20 @@ export async function analyzeRangeWorkspace(
     skippedUnreadableFiles
   } = await collectAnalyzedFiles<TodayFileStat, Extract<FileTimestampStatus, { kind: 'touch' }>>(textUris, {
     prepare: async (uri) => {
-      const timestampStatus = await getTodayStatus(uri, range.start);
+      const timestampStatus = await getTodayStatus(uri, range.start, preset);
       return timestampStatus.kind === 'touch' ? timestampStatus : undefined;
     },
     mapFile: ({ file, prepared }) => ({
       ...file,
       status: prepared.status,
-      modifiedAt: prepared.modifiedAt
+      modifiedAt: prepared.modifiedAt,
+      modifiedAtTimestamp: prepared.modifiedAtTimestamp
     }),
     workerCount
   });
   const skippedBinaryFiles = initialBinarySkips + skippedBinaryContent;
 
-  const sortedTouchedFiles = [...touchedFiles].sort((left, right) =>
-    right.modifiedAt.localeCompare(left.modifiedAt) || right.codeLines - left.codeLines
-  );
+  const sortedTouchedFiles = sortTouchedFiles(touchedFiles);
   const newFiles = sortedTouchedFiles.filter((file) => file.status === 'new');
   const languages = buildLanguageSummaries(touchedFiles);
   const totals = touchedFiles.reduce(
@@ -138,23 +137,46 @@ export async function analyzeRangeWorkspace(
   };
 }
 
-async function getTodayStatus(uri: vscode.Uri, todayStart: Date): Promise<FileTimestampStatus> {
+export function sortTouchedFiles(files: TodayFileStat[]): TodayFileStat[] {
+  return [...files].sort(
+    (left, right) => right.modifiedAtTimestamp - left.modifiedAtTimestamp || right.codeLines - left.codeLines
+  );
+}
+
+async function getTodayStatus(
+  uri: vscode.Uri,
+  rangeStart: Date,
+  preset: AnalysisDateRangePreset
+): Promise<FileTimestampStatus> {
   try {
     const info = await stat(uri.fsPath);
     const modifiedAt = new Date(info.mtimeMs);
-    if (modifiedAt < todayStart) {
+    if (modifiedAt < rangeStart) {
       return { kind: 'skip' };
     }
 
     const createdAtMs = Number.isFinite(info.birthtimeMs) && info.birthtimeMs > 0 ? info.birthtimeMs : info.ctimeMs;
-    const createdToday = createdAtMs >= todayStart.getTime();
+    const createdToday = createdAtMs >= rangeStart.getTime();
 
     return {
       kind: 'touch',
       status: createdToday ? 'new' : 'modified',
-      modifiedAt: modifiedAt.toLocaleTimeString()
+      modifiedAt: formatModifiedAt(modifiedAt, preset),
+      modifiedAtTimestamp: modifiedAt.getTime()
     };
   } catch {
     return { kind: 'skip' };
   }
+}
+
+function formatModifiedAt(value: Date, preset: AnalysisDateRangePreset): string {
+  if (preset === 'today') {
+    return value.toLocaleTimeString();
+  }
+
+  const month = `${value.getMonth() + 1}`.padStart(2, '0');
+  const day = `${value.getDate()}`.padStart(2, '0');
+  const hour = `${value.getHours()}`.padStart(2, '0');
+  const minute = `${value.getMinutes()}`.padStart(2, '0');
+  return `${month}-${day} ${hour}:${minute}`;
 }

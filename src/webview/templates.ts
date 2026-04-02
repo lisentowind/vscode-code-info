@@ -618,6 +618,14 @@ ${echartsScript}
     const workspaceName = projectStats?.workspaceName || todayStats?.workspaceName || '当前工作区';
     const rangeLabel = todayStats?.rangeLabel || '今天';
     const rangeHeading = rangeLabel === '今天' ? '今日' : rangeLabel;
+    const refreshRangeCommand = !todayStats
+      ? 'refreshToday'
+      : todayStats.rangePreset === 'last7Days'
+        ? 'refreshLast7Days'
+        : todayStats.rangePreset === 'last30Days'
+          ? 'refreshLast30Days'
+          : 'refreshToday';
+    const refreshRangeLabel = !todayStats || rangeLabel === '今天' ? '刷新今天' : ('刷新' + rangeLabel);
     const generatedAt = todayStats?.generatedAt || projectStats?.generatedAt;
     const generatedLabel = generatedAt ? new Date(generatedAt).toLocaleString() : '';
     const heroBadges = [];
@@ -635,9 +643,9 @@ ${echartsScript}
     const chipsHtml = heroBadges.slice(0, presentation.compact ? 2 : 4).join('');
 
     const quickActionsHtml = presentation.compact
-      ? '<button class="action" data-command="refreshToday">' + icon('refresh') + '刷新今天</button>' +
+      ? '<button class="action" data-command="' + refreshRangeCommand + '">' + icon('refresh') + escapeHtml(refreshRangeLabel) + '</button>' +
         '<button class="action secondary" data-command="openPanel">' + icon('detail') + '详情分析</button>'
-      : '<button class="action" data-command="refreshToday">' + icon('refresh') + '刷新今天</button>' +
+      : '<button class="action" data-command="' + refreshRangeCommand + '">' + icon('refresh') + escapeHtml(refreshRangeLabel) + '</button>' +
         '<button class="action" data-command="showStats">' + icon('project') + '开始项目分析</button>';
 
     const menuHtml =
@@ -700,9 +708,9 @@ ${echartsScript}
     const floatingBarHtml = !presentation.compact
       ? '' +
         '<div class="floatbar" aria-label="快捷操作">' +
-          '<button class="fab-button" style="--i:0" data-command="refreshToday" aria-label="刷新今天">' +
+          '<button class="fab-button" style="--i:0" data-command="' + refreshRangeCommand + '" aria-label="' + escapeHtml(refreshRangeLabel) + '">' +
             icon('refresh', 'fab-icon') +
-            '<span class="fab-label">刷新今天</span>' +
+            '<span class="fab-label">' + escapeHtml(refreshRangeLabel) + '</span>' +
           '</button>' +
           '<button class="fab-button" style="--i:1" data-command="' + projectActionCommand + '" aria-label="' + escapeHtml(projectActionLabel) + '">' +
             icon('project', 'fab-icon') +
