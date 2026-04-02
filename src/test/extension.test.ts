@@ -7,6 +7,7 @@ import { buildDirectorySummaries, buildDirectoryTree } from '../analysis/summari
 import { sortTouchedFiles } from '../analysis/todayAnalyzer';
 import { buildWeeklyBuckets, getWeekBucketKey, parseDeletedFilesOutput, parseNumstatOutput } from '../git/common';
 import { createDashboardPanelOptions, getDashboardPanelTitle } from '../ui/panels';
+import { getDashboardHtml } from '../webview/templates';
 import type { TextFileAnalysisResult } from '../analysis/fileAnalyzer';
 import type { FileStat } from '../types';
 
@@ -319,5 +320,65 @@ suite('Extension Test Suite', () => {
     ]);
 
     assert.deepStrictEqual(files.map((file) => file.path), ['b.ts', 'a.ts']);
+  });
+
+  test('range dashboard uses clearer wording for stats notes', () => {
+    const html = getDashboardHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {
+        todayStats: {
+          workspaceName: 'demo',
+          generatedAt: new Date(2026, 3, 2, 10, 0, 0).toLocaleString(),
+          rangePreset: 'today',
+          rangeLabel: '今天',
+          totals: {
+            touchedFiles: 3,
+            newFiles: 1,
+            deletedFiles: 0,
+            lines: 20,
+            codeLines: 10,
+            commentLines: 5,
+            blankLines: 5,
+            bytes: 200,
+            todoCount: 2,
+            addedLines: 5,
+            deletedLines: 2,
+            changedLines: 7
+          },
+          languages: [],
+          touchedFiles: [],
+          newFiles: [],
+          deletedFiles: [],
+          todoLocations: [],
+          insights: {
+            topLanguage: 'typescript',
+            topLanguageShare: 1,
+            topPath: 'src/a.ts',
+            todoTouchedCount: 2
+          },
+          analysisMeta: {
+            durationMs: 123,
+            matchedFiles: 10,
+            analyzedFiles: 3,
+            skippedBinaryFiles: 0,
+            skippedUnreadableFiles: 0,
+            scopeSummary: '全工作区',
+            gitAvailable: true,
+            gitSince: '2026-04-02'
+          }
+        }
+      },
+      {
+        compact: false,
+        title: 'Code Info',
+        subtitle: 'demo'
+      }
+    );
+
+    assert.ok(html.includes('统计说明'));
+    assert.ok(html.includes('纳入统计的文件'));
+    assert.ok(html.includes('Git 统计起点'));
+    assert.ok(html.includes('分析耗时'));
+    assert.ok(!html.includes('今天元信息'));
   });
 });

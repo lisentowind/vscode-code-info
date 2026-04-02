@@ -780,12 +780,12 @@ ${echartsScript}
         '</section>' +
         '<section class="grid">' +
           '<div class="panel"><div class="section-title">' + icon('language') + '<h2>' + escapeHtml(rangeHeading) + '语言分布</h2></div><div class="section-note">按当前范围内变更文件的代码行统计（支持 hover 查看详情）。</div><div class="chart" id="chart-today-language"></div><div class="bars chart-fallback">' + renderBarList(todayStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '当前范围暂无语言数据') + '</div></div>' +
-          '<div class="panel"><div class="section-title">' + icon('meta') + '<h2>' + escapeHtml(rangeHeading) + '元信息</h2></div><div class="section-note">本模块只在视图可见时刷新，避免长期常驻分析。</div><div class="todo-summary">' +
+          '<div class="panel"><div class="section-title">' + icon('meta') + '<h2>统计说明</h2></div><div class="section-note">说明这组范围统计是怎么得出来的，以及这次分析覆盖了什么。</div><div class="todo-summary">' +
             '<div class="todo-item"><span>扫描范围</span><span class="muted">' + escapeHtml(todayStats.analysisMeta.scopeSummary) + '</span></div>' +
-            '<div class="todo-item"><span>匹配文件</span><span class="muted">' + numberFormat(todayStats.analysisMeta.matchedFiles) + '</span></div>' +
-            '<div class="todo-item"><span>范围变更</span><span class="muted">' + numberFormat(todayStats.analysisMeta.analyzedFiles) + '</span></div>' +
-            '<div class="todo-item"><span>Git 统计</span><span class="muted">' + (todayStats.analysisMeta.gitAvailable ? ('从 ' + escapeHtml(todayStats.analysisMeta.gitSince || rangeLabel) + ' 起') : '不可用') + '</span></div>' +
-            '<div class="todo-item"><span>耗时</span><span class="muted">' + escapeHtml(durationFormat(todayStats.analysisMeta.durationMs)) + '</span></div>' +
+            '<div class="todo-item"><span>纳入统计的文件</span><span class="muted">' + numberFormat(todayStats.analysisMeta.matchedFiles) + '</span></div>' +
+            '<div class="todo-item"><span>检测到的变更文件</span><span class="muted">' + numberFormat(todayStats.analysisMeta.analyzedFiles) + '</span></div>' +
+            '<div class="todo-item"><span>Git 统计起点</span><span class="muted">' + (todayStats.analysisMeta.gitAvailable ? ('从 ' + escapeHtml(todayStats.analysisMeta.gitSince || rangeLabel) + ' 起') : '不可用') + '</span></div>' +
+            '<div class="todo-item"><span>分析耗时</span><span class="muted">' + escapeHtml(durationFormat(todayStats.analysisMeta.durationMs)) + '</span></div>' +
           '</div></div>' +
         '</section>' +
         '<section class="panel"><div class="section-title">' + icon('newFile') + '<h2>' + escapeHtml(rangeHeading) + '新增文件</h2></div><div class="section-note">当前范围内首次创建的文件。</div>' + renderTodayFiles(todayStats.newFiles, '当前范围内还没有检测到新增文件。') + '</section>' +
