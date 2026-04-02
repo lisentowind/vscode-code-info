@@ -111,6 +111,7 @@
 - 解析 base / head
 - 调用本地 `git diff`、`git diff --numstat`、`git diff --name-status`
 - 获取文件级增删信息
+- 识别 rename、binary、submodule 等特殊状态
 
 这一层只负责“拿原始差异”，不负责页面展示，也不负责扩展统计。
 
@@ -124,6 +125,7 @@
 职责：
 
 - 将 Git 原始差异映射为统一的 `CompareStats`
+- 为纳入比较的文件生成 `before` / `after` 两侧快照统计
 - 聚合语言变化
 - 聚合目录变化
 - 统计 TODO 净变化
@@ -137,6 +139,24 @@
 - TODO 解析能力
 
 目标是让“项目统计”和“变更对比”的口径尽可能一致。
+
+### 统计口径闭合方式
+
+第一期不能只依赖 `git diff --numstat` 去推导语言变化、目录变化、TODO 净变化。
+
+正确做法是：
+
+- Git 层先确定“哪些文件需要参与比较”
+- 分析层分别读取两侧内容：
+  - `before`：从 `baseRef` 读取文件内容，生成 `FileStat`
+  - `after`：从 `headRef` 读取文件内容，生成 `FileStat`
+- 再基于 `before / after` 做：
+  - 语言变化
+  - 目录变化
+  - TODO 净变化
+  - 代码量净变化
+
+这样可以保证“项目统计”和“变更对比”共享同一套分析口径，而不是把 diff 行数误当作结构统计结果。
 
 ### 3. 页面状态层
 
@@ -168,8 +188,8 @@
 
 建议新增一个统一的 `CompareStats`，至少包含：
 
-- `baseRef`
-- `headRef`
+- `compareSource`
+- `resolvedTargets`
 - `summary`
 - `files`
 - `languages`
@@ -179,12 +199,43 @@
 
 其中：
 
+- `compareSource` 用来描述用户选择的是哪种对比来源，例如：
+  - `refPair`
+  - 未来可扩展为 `timeRange`
+- `resolvedTargets` 记录最终被解析出来的比较对象，例如：
+  - `baseRef`
+  - `headRef`
+  - 是否使用自动推断出的 `main/master`
 - `summary` 面向卡片展示
 - `files` 面向文件级表格
 - `languages` / `directories` 面向统计级变化
 - `analysisMeta` 记录耗时、差异来源、Git 可用性、是否使用自动 base 分支
 
-这样后续扩展“时间区间对比”时，可以直接复用同一页面模型，不需要重做 UI。
+这样后续扩展“时间区间对比”时，可以继续复用同一页面模型，不需要为了 `baseRef/headRef` 再重开一套类型。
+
+### 文件结果模型
+
+第一期文件级结果至少要支持以下状态：
+
+- `added`
+- `modified`
+- `deleted`
+- `renamed`
+- `binary`
+
+第一期即使不把每种状态做成复杂交互，也必须先定义展示和降级策略：
+
+- `renamed`
+  - 展示旧路径和新路径
+  - 行数变化仍可展示
+- `binary`
+  - 标记为二进制变更
+  - 不参与代码量、TODO 等文本级统计
+- `submodule`
+  - 第一期开门见山标记为“暂不展开”
+  - 不进入文本统计
+
+这一步是为了避免“文件变化总数”和“统计级变化”口径不一致。
 
 ## 关键交互
 
@@ -212,12 +263,15 @@
 - 用户输入的 commit 不存在
 - base/head 顺序无效
 - Git 命令执行失败
+- 文件在某一侧不存在
+- 文件是 rename、binary 或 submodule，无法进入常规文本统计
 
 错误展示原则：
 
 - 命令失败时在页面中显示明确原因
 - 不要只弹 toast
 - 保持页面可重新提交分析
+- 对于可降级场景，优先降级展示而不是整页失败
 
 ## 测试策略
 
@@ -225,8 +279,10 @@
 
 - Git diff 输出解析测试
 - `CompareStats` 聚合测试
+- `before / after` 双侧文件统计测试
 - 语言变化和目录变化汇总测试
 - commit 输入校验测试
+- rename / binary / submodule 降级展示测试
 - compare 页面关键文案和空态渲染测试
 
 重点是优先测试“纯函数”和“解析函数”，避免一开始就把过多成本放在 webview 集成测试上。
