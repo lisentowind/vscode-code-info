@@ -1,6 +1,7 @@
 out
 dist
 node_modules
+.worktrees
 .DS_Store
 .vscode-test/
 *.vsix
