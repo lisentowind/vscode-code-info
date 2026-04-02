@@ -1,7 +1,12 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { collectAnalyzedFiles } from '../analysis/shared';
+import { createPresetDateRange, formatDateRangeLabel } from '../analysis/dateRange';
 import { countTextMetrics } from '../analysis/lineMetrics';
 import { buildDirectorySummaries, buildDirectoryTree } from '../analysis/summaries';
+import { buildWeeklyBuckets, getWeekBucketKey, parseDeletedFilesOutput, parseNumstatOutput } from '../git/common';
+import { createDashboardPanelOptions, getDashboardPanelTitle } from '../ui/panels';
+import type { TextFileAnalysisResult } from '../analysis/fileAnalyzer';
 import type { FileStat } from '../types';
 
 suite('Extension Test Suite', () => {
@@ -92,5 +97,191 @@ suite('Extension Test Suite', () => {
     assert.strictEqual(tree[0].codeLines, 16);
     assert.strictEqual(tree[0].children[0].path, 'app/src');
     assert.strictEqual(tree[0].children[0].children.length, 2);
+  });
+
+  test('collectAnalyzedFiles aggregates entries, skipped files, and sorted TODO locations', async () => {
+    const firstUri = vscode.Uri.file('/tmp/project/src/a.ts');
+    const secondUri = vscode.Uri.file('/tmp/project/src/b.ts');
+    const thirdUri = vscode.Uri.file('/tmp/project/src/c.ts');
+    const fourthUri = vscode.Uri.file('/tmp/project/src/d.ts');
+
+    const todoLocation = (path: string, line: number, keyword: string) => ({
+      resource: `file://${path}`,
+      path,
+      language: 'typescript',
+      line,
+      character: 1,
+      keyword,
+      preview: `${keyword} marker`
+    });
+
+    const fileStat = (path: string, codeLines: number): FileStat => ({
+      resource: `file://${path}`,
+      path,
+      language: 'typescript',
+      lines: codeLines,
+      codeLines,
+      commentLines: 0,
+      blankLines: 0,
+      bytes: codeLines * 10,
+      todoCounts: { total: 0, todo: 0, fixme: 0, hack: 0 }
+    });
+
+    const responses = new Map<string, TextFileAnalysisResult>([
+      [
+        firstUri.toString(),
+        {
+          kind: 'file',
+          file: fileStat('src/a.ts', 10),
+          todoLocations: [todoLocation('src/a.ts', 3, 'TODO')]
+        }
+      ],
+      [
+        secondUri.toString(),
+        {
+          kind: 'skipped-binary-content'
+        }
+      ],
+      [
+        thirdUri.toString(),
+        {
+          kind: 'skipped-unreadable'
+        }
+      ],
+      [
+        fourthUri.toString(),
+        {
+          kind: 'file',
+          file: fileStat('src/d.ts', 4),
+          todoLocations: [todoLocation('src/d.ts', 1, 'FIXME')]
+        }
+      ]
+    ]);
+
+    const result = await collectAnalyzedFiles([firstUri, secondUri, thirdUri, fourthUri], {
+      analyzeFile: async (uri) => {
+        const response = responses.get(uri.toString());
+        if (!response) {
+          throw new Error(`Missing fixture for ${uri.toString()}`);
+        }
+        return response;
+      },
+      mapFile: ({ file }) => file,
+      workerCount: 2
+    });
+
+    assert.deepStrictEqual(
+      result.entries.map((entry) => entry.path),
+      ['src/a.ts', 'src/d.ts']
+    );
+    assert.strictEqual(result.skippedBinaryContent, 1);
+    assert.strictEqual(result.skippedUnreadableFiles, 1);
+    assert.deepStrictEqual(
+      result.todoLocations.map((location) => `${location.path}:${location.line}:${location.keyword}`),
+      ['src/a.ts:3:TODO', 'src/d.ts:1:FIXME']
+    );
+  });
+
+  test('parseDeletedFilesOutput collects deleted paths from git name-status output', () => {
+    const deletedFiles = parseDeletedFilesOutput([
+      'D\tsrc/old.ts',
+      'M\tsrc/current.ts',
+      '',
+      'D\tsrc/legacy.ts'
+    ].join('\n'));
+
+    assert.deepStrictEqual(deletedFiles, ['src/old.ts', 'src/legacy.ts']);
+  });
+
+  test('parseNumstatOutput sums added and deleted lines', () => {
+    const totals = parseNumstatOutput([
+      '12\t4\tsrc/a.ts',
+      '8\t1\tsrc/b.ts',
+      '-\t-\tbinary.png',
+      ''
+    ].join('\n'));
+
+    assert.deepStrictEqual(totals, {
+      addedLines: 20,
+      deletedLines: 5
+    });
+  });
+
+  test('weekly bucket helpers normalize dates into monday buckets', () => {
+    const now = new Date('2026-04-02T10:00:00Z');
+    const buckets = buildWeeklyBuckets(3, now);
+
+    assert.deepStrictEqual([...buckets.keys()], ['2026-03-16', '2026-03-23', '2026-03-30']);
+    assert.strictEqual(getWeekBucketKey(new Date('2026-04-02T01:00:00Z')), '2026-03-30');
+    assert.strictEqual(getWeekBucketKey(new Date('2026-03-29T23:00:00Z')), '2026-03-23');
+  });
+
+  test('getDashboardPanelTitle prefers project stats, then today stats, then fallback', () => {
+    assert.strictEqual(
+      getDashboardPanelTitle({
+        projectStats: { workspaceName: 'Project Workspace' } as never,
+        todayStats: { workspaceName: 'Today Workspace' } as never
+      }),
+      'Project Workspace'
+    );
+    assert.strictEqual(
+      getDashboardPanelTitle({
+        todayStats: { workspaceName: 'Today Workspace' } as never
+      }),
+      'Today Workspace'
+    );
+    assert.strictEqual(getDashboardPanelTitle({}), 'Dashboard');
+    assert.strictEqual(getDashboardPanelTitle({}, 'Empty'), 'Empty');
+  });
+
+  test('createDashboardPanelOptions adds local resource roots only when extension uri exists', () => {
+    const withoutExtensionUri = createDashboardPanelOptions();
+    assert.strictEqual(withoutExtensionUri.enableScripts, true);
+    assert.strictEqual(withoutExtensionUri.retainContextWhenHidden, true);
+    assert.strictEqual('localResourceRoots' in withoutExtensionUri, false);
+
+    const extensionUri = vscode.Uri.file('/tmp/code-info-extension');
+    const withExtensionUri = createDashboardPanelOptions(extensionUri);
+    assert.strictEqual(withExtensionUri.enableScripts, true);
+    assert.strictEqual(withExtensionUri.retainContextWhenHidden, true);
+    assert.deepStrictEqual(withExtensionUri.localResourceRoots, [vscode.Uri.joinPath(extensionUri, 'media')]);
+  });
+
+  test('createPresetDateRange builds today and recent-day presets from a reference date', () => {
+    const reference = new Date(2026, 3, 2, 10, 30, 0, 0);
+
+    const today = createPresetDateRange('today', reference);
+    assert.strictEqual(today.label, '今天');
+    assert.strictEqual(today.start.getFullYear(), 2026);
+    assert.strictEqual(today.start.getMonth(), 3);
+    assert.strictEqual(today.start.getDate(), 2);
+    assert.strictEqual(today.start.getHours(), 0);
+    assert.strictEqual(today.start.getMinutes(), 0);
+    assert.strictEqual(today.end.getHours(), 23);
+    assert.strictEqual(today.end.getMinutes(), 59);
+    assert.strictEqual(today.end.getSeconds(), 59);
+    assert.strictEqual(today.end.getMilliseconds(), 999);
+
+    const last7Days = createPresetDateRange('last7Days', reference);
+    assert.strictEqual(last7Days.label, '最近 7 天');
+    assert.strictEqual(last7Days.start.getFullYear(), 2026);
+    assert.strictEqual(last7Days.start.getMonth(), 2);
+    assert.strictEqual(last7Days.start.getDate(), 27);
+    assert.strictEqual(last7Days.start.getHours(), 0);
+    assert.strictEqual(last7Days.end.getFullYear(), 2026);
+    assert.strictEqual(last7Days.end.getMonth(), 3);
+    assert.strictEqual(last7Days.end.getDate(), 2);
+    assert.strictEqual(last7Days.end.getHours(), 23);
+  });
+
+  test('formatDateRangeLabel renders single-day and multi-day labels', () => {
+    assert.strictEqual(
+      formatDateRangeLabel(new Date(2026, 3, 2, 0, 0, 0, 0), new Date(2026, 3, 2, 23, 59, 59, 999)),
+      '2026-04-02'
+    );
+    assert.strictEqual(
+      formatDateRangeLabel(new Date(2026, 2, 27, 0, 0, 0, 0), new Date(2026, 3, 2, 23, 59, 59, 999)),
+      '2026-03-27 ~ 2026-04-02'
+    );
   });
 });

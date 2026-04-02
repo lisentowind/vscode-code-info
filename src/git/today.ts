@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { isGitRepository, parseDeletedFilesOutput, parseNumstatOutput, runGit } from './common';
 
 export type GitTodayChangeSummary = {
   available: boolean;
@@ -11,44 +11,18 @@ export async function analyzeGitTodayChanges(gitRoot: string, since: Date): Prom
   const sinceText = formatLocalSince(since);
 
   try {
-    await runGit(['rev-parse', '--is-inside-work-tree'], gitRoot);
+    if (!(await isGitRepository(gitRoot))) {
+      throw new Error('Not a git repository');
+    }
 
     const deletedOutput = await runGit(
       ['log', `--since=${sinceText}`, '--pretty=format:', '--name-status', '--diff-filter=D', '--no-renames'],
       gitRoot
     );
-
-    const deletedFiles = new Set<string>();
-    for (const line of deletedOutput.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-      const [status, filePath] = trimmed.split('\t');
-      if (status === 'D' && filePath) {
-        deletedFiles.add(filePath);
-      }
-    }
+    const deletedFiles = new Set(parseDeletedFilesOutput(deletedOutput));
 
     const numstatOutput = await runGit(['log', `--since=${sinceText}`, '--pretty=format:', '--numstat', '--no-renames'], gitRoot);
-    let addedLines = 0;
-    let deletedLines = 0;
-
-    for (const line of numstatOutput.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-      const [addedText, deletedText] = trimmed.split('\t');
-      const added = Number.parseInt(addedText, 10);
-      const deleted = Number.parseInt(deletedText, 10);
-      if (Number.isFinite(added)) {
-        addedLines += added;
-      }
-      if (Number.isFinite(deleted)) {
-        deletedLines += deleted;
-      }
-    }
+    const { addedLines, deletedLines } = parseNumstatOutput(numstatOutput);
 
     return {
       available: true,
@@ -64,18 +38,6 @@ export async function analyzeGitTodayChanges(gitRoot: string, since: Date): Prom
       deletedFiles: []
     };
   }
-}
-
-function runGit(args: string[], cwd: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, encoding: 'utf8', maxBuffer: 1024 * 1024 * 8 }, (error, stdout) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(stdout);
-    });
-  });
 }
 
 function formatLocalSince(value: Date): string {

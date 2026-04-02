@@ -30,35 +30,13 @@ export function showStatsPanel(
   onVisible?: () => void | Promise<void>,
   extensionUri?: vscode.Uri
 ): void {
-	  const workspaceName = data.projectStats?.workspaceName ?? data.todayStats?.workspaceName ?? 'Dashboard';
-	  state.extensionUri = extensionUri;
-	  if (!state.panel) {
-	    const webviewOptions: vscode.WebviewOptions & vscode.WebviewPanelOptions = {
-	      enableScripts: true,
-	      retainContextWhenHidden: true,
-	      ...(extensionUri ? { localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')] } : {})
-	    };
-	    state.panel = vscode.window.createWebviewPanel('codeInfoStats', `Code Info · ${workspaceName}`, vscode.ViewColumn.One, webviewOptions);
-	    applyPanelIcon(state.panel, extensionUri);
+  const workspaceName = getDashboardPanelTitle(data);
+  const panel = ensurePanel(state, `Code Info · ${workspaceName}`, onCommand, onVisible, extensionUri);
 
-    state.panel.onDidDispose(() => {
-      state.panel = undefined;
-    });
-    state.panel.onDidChangeViewState((event) => {
-      if (event.webviewPanel.visible) {
-        void onVisible?.();
-      }
-    });
-
-    state.panel.webview.onDidReceiveMessage((message: WebviewCommandMessage) => {
-      void onCommand(message);
-    });
-  }
-
-  state.panel.title = `Code Info · ${workspaceName}`;
-  applyPanelIcon(state.panel, extensionUri);
-  renderPanel(state.panel, data, extensionUri);
-  state.panel.reveal(vscode.ViewColumn.One, false);
+  panel.title = `Code Info · ${workspaceName}`;
+  applyPanelIcon(panel, extensionUri);
+  renderPanel(panel, data, extensionUri);
+  panel.reveal(vscode.ViewColumn.One, false);
 }
 
 export function showDashboardEmptyPanel(
@@ -66,38 +44,16 @@ export function showDashboardEmptyPanel(
   onCommand: (message?: WebviewCommandMessage) => void | Promise<void>,
   onVisible?: () => void | Promise<void>,
   extensionUri?: vscode.Uri
-	): void {
-	  state.extensionUri = extensionUri;
-	  if (!state.panel) {
-	    const webviewOptions: vscode.WebviewOptions & vscode.WebviewPanelOptions = {
-	      enableScripts: true,
-	      retainContextWhenHidden: true,
-	      ...(extensionUri ? { localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')] } : {})
-	    };
-	    state.panel = vscode.window.createWebviewPanel('codeInfoStats', 'Code Info · Dashboard', vscode.ViewColumn.One, webviewOptions);
-	    applyPanelIcon(state.panel, extensionUri);
+): void {
+  const panel = ensurePanel(state, 'Code Info · Dashboard', onCommand, onVisible, extensionUri);
 
-    state.panel.onDidDispose(() => {
-      state.panel = undefined;
-    });
-    state.panel.onDidChangeViewState((event) => {
-      if (event.webviewPanel.visible) {
-        void onVisible?.();
-      }
-    });
-
-    state.panel.webview.onDidReceiveMessage((message: WebviewCommandMessage) => {
-      void onCommand(message);
-    });
-  }
-
-  state.panel.title = 'Code Info · Dashboard';
-  applyPanelIcon(state.panel, extensionUri);
-  state.panel.webview.html = getEmptyStateHtml(state.panel.webview, false, {
+  panel.title = 'Code Info · Dashboard';
+  applyPanelIcon(panel, extensionUri);
+  panel.webview.html = getEmptyStateHtml(panel.webview, false, {
     showOpenPanel: false,
-    cssUri: getCssUri(state.panel.webview, extensionUri)
+    cssUri: getCssUri(panel.webview, extensionUri)
   });
-  state.panel.reveal(vscode.ViewColumn.One, false);
+  panel.reveal(vscode.ViewColumn.One, false);
 }
 
 export function showEmptyIfOpen(state: DashboardPanelState): void {
@@ -123,6 +79,54 @@ function renderPanel(panel: vscode.WebviewPanel, data: DashboardData, extensionU
     echartsUri,
     cssUri: getCssUri(panel.webview, extensionUri)
   });
+}
+
+export function getDashboardPanelTitle(data: DashboardData, fallback = 'Dashboard'): string {
+  return data.projectStats?.workspaceName ?? data.todayStats?.workspaceName ?? fallback;
+}
+
+export function createDashboardPanelOptions(
+  extensionUri?: vscode.Uri
+): vscode.WebviewOptions & vscode.WebviewPanelOptions {
+  return {
+    enableScripts: true,
+    retainContextWhenHidden: true,
+    ...(extensionUri ? { localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')] } : {})
+  };
+}
+
+function ensurePanel(
+  state: DashboardPanelState,
+  initialTitle: string,
+  onCommand: (message?: WebviewCommandMessage) => void | Promise<void>,
+  onVisible?: () => void | Promise<void>,
+  extensionUri?: vscode.Uri
+): vscode.WebviewPanel {
+  state.extensionUri = extensionUri;
+
+  if (!state.panel) {
+    state.panel = vscode.window.createWebviewPanel(
+      'codeInfoStats',
+      initialTitle,
+      vscode.ViewColumn.One,
+      createDashboardPanelOptions(extensionUri)
+    );
+    applyPanelIcon(state.panel, extensionUri);
+
+    state.panel.onDidDispose(() => {
+      state.panel = undefined;
+    });
+    state.panel.onDidChangeViewState((event) => {
+      if (event.webviewPanel.visible) {
+        void onVisible?.();
+      }
+    });
+    state.panel.webview.onDidReceiveMessage((message: WebviewCommandMessage) => {
+      void onCommand(message);
+    });
+  }
+
+  return state.panel;
 }
 
 function applyPanelIcon(panel: vscode.WebviewPanel, extensionUri?: vscode.Uri): void {

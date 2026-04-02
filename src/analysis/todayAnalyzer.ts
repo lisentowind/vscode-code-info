@@ -3,7 +3,8 @@ import path from 'node:path';
 import * as vscode from 'vscode';
 import { analyzeGitTodayChanges } from '../git/today';
 import type { Logger, TodayDeletedFile, TodayFileStat, TodayStats } from '../types';
-import { analyzeTextFile } from './fileAnalyzer';
+import { createPresetDateRange, formatDateRangeLabel } from './dateRange';
+import { collectAnalyzedFiles } from './shared';
 import { findWorkspaceFilesForAnalysis, getWorkerCount, isBinaryLike } from './targets';
 import { buildLanguageSummaries } from './summaries';
 
@@ -22,9 +23,9 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
   const { uris, gitRoot, scopeSummary } = await findWorkspaceFilesForAnalysis(folders, logger);
   const textUris = uris.filter((uri) => !isBinaryLike(uri));
   const initialBinarySkips = uris.length - textUris.length;
-  const todayStart = getStartOfToday();
-  const gitSinceLabel = formatLocalSinceLabel(todayStart);
-  const gitChanges = await analyzeGitTodayChanges(gitRoot, todayStart);
+  const todayRange = createPresetDateRange('today');
+  const gitSinceLabel = formatDateRangeLabel(todayRange.start, todayRange.end);
+  const gitChanges = await analyzeGitTodayChanges(gitRoot, todayRange.start);
   const deletedFiles: TodayDeletedFile[] = gitChanges.available
     ? gitChanges.deletedFiles
       .map((filePath) => {
@@ -35,55 +36,31 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
       .sort((left, right) => left.path.localeCompare(right.path))
     : [];
 
-  const touchedFiles: TodayFileStat[] = [];
-  const todoLocations: TodayStats['todoLocations'] = [];
-  const maxTodoLocations = 200;
-  let skippedUnreadableFiles = 0;
-  let skippedBinaryFiles = initialBinarySkips;
-  let currentIndex = 0;
   const workerCount = Math.min(Math.max(getWorkerCount(), 1), Math.max(textUris.length, 1));
-
-  const workers = Array.from({ length: workerCount }, async () => {
-    while (currentIndex < textUris.length) {
-      const index = currentIndex;
-      currentIndex += 1;
-      const uri = textUris[index];
-      const timestampStatus = await getTodayStatus(uri, todayStart);
-
-      if (timestampStatus.kind === 'skip') {
-        continue;
-      }
-
-      const analyzed = await analyzeTextFile(uri);
-      switch (analyzed.kind) {
-        case 'file':
-          touchedFiles.push({
-            ...analyzed.file,
-            status: timestampStatus.status,
-            modifiedAt: timestampStatus.modifiedAt
-          });
-          if (analyzed.todoLocations.length && todoLocations.length < maxTodoLocations) {
-            todoLocations.push(...analyzed.todoLocations.slice(0, maxTodoLocations - todoLocations.length));
-          }
-          break;
-        case 'skipped-binary-content':
-          skippedBinaryFiles += 1;
-          break;
-        case 'skipped-unreadable':
-          skippedUnreadableFiles += 1;
-          break;
-      }
-    }
+  const {
+    entries: touchedFiles,
+    todoLocations,
+    skippedBinaryContent,
+    skippedUnreadableFiles
+  } = await collectAnalyzedFiles<TodayFileStat, Extract<FileTimestampStatus, { kind: 'touch' }>>(textUris, {
+    prepare: async (uri) => {
+      const timestampStatus = await getTodayStatus(uri, todayRange.start);
+      return timestampStatus.kind === 'touch' ? timestampStatus : undefined;
+    },
+    mapFile: ({ file, prepared }) => ({
+      ...file,
+      status: prepared.status,
+      modifiedAt: prepared.modifiedAt
+    }),
+    workerCount
   });
-
-  await Promise.all(workers);
+  const skippedBinaryFiles = initialBinarySkips + skippedBinaryContent;
 
   const sortedTouchedFiles = [...touchedFiles].sort((left, right) =>
     right.modifiedAt.localeCompare(left.modifiedAt) || right.codeLines - left.codeLines
   );
   const newFiles = sortedTouchedFiles.filter((file) => file.status === 'new');
   const languages = buildLanguageSummaries(touchedFiles);
-  todoLocations.sort((left, right) => left.path.localeCompare(right.path) || left.line - right.line || left.keyword.localeCompare(right.keyword));
   const totals = touchedFiles.reduce(
     (accumulator, file) => {
       accumulator.touchedFiles += 1;
@@ -171,17 +148,4 @@ async function getTodayStatus(uri: vscode.Uri, todayStart: Date): Promise<FileTi
   } catch {
     return { kind: 'skip' };
   }
-}
-
-function getStartOfToday(): Date {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return now;
-}
-
-function formatLocalSinceLabel(value: Date): string {
-  const year = value.getFullYear();
-  const month = `${value.getMonth() + 1}`.padStart(2, '0');
-  const day = `${value.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day} 00:00`;
 }

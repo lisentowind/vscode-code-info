@@ -1,12 +1,14 @@
-import { execFile } from 'node:child_process';
 import { GIT_WEEKS } from '../constants';
-import type { GitAuthor, GitStats, GitWeek } from '../types';
+import type { GitAuthor, GitStats } from '../types';
+import { buildWeeklyBuckets, getWeekBucketKey, isGitRepository, runGit } from './common';
 
 export async function analyzeGitHistory(rootPath: string): Promise<GitStats> {
   const emptyWeeks = buildWeeklyBuckets(GIT_WEEKS);
 
   try {
-    await runGit(['rev-parse', '--is-inside-work-tree'], rootPath);
+    if (!(await isGitRepository(rootPath))) {
+      throw new Error('Not a git repository');
+    }
     const logOutput = await runGit(
       ['log', '--date=short', '--pretty=format:%ad%x09%an', `--since=${GIT_WEEKS * 7}.days`],
       rootPath
@@ -61,50 +63,4 @@ export async function analyzeGitHistory(rootPath: string): Promise<GitStats> {
       topAuthors: []
     };
   }
-}
-
-function runGit(args: string[], cwd: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, encoding: 'utf8', maxBuffer: 1024 * 1024 * 8 }, (error, stdout) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve(stdout);
-    });
-  });
-}
-
-function buildWeeklyBuckets(weeks: number): Map<string, GitWeek> {
-  const buckets = new Map<string, GitWeek>();
-  const currentWeekStart = getWeekStart(new Date());
-
-  for (let index = weeks - 1; index >= 0; index -= 1) {
-    const weekStart = new Date(currentWeekStart);
-    weekStart.setUTCDate(weekStart.getUTCDate() - index * 7);
-    const key = getWeekBucketKey(weekStart);
-    buckets.set(key, { label: formatMonthDay(weekStart), commits: 0 });
-  }
-
-  return buckets;
-}
-
-function getWeekBucketKey(date: Date): string {
-  const weekStart = getWeekStart(date);
-  return weekStart.toISOString().slice(0, 10);
-}
-
-function getWeekStart(date: Date): Date {
-  const value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const day = value.getUTCDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  value.setUTCDate(value.getUTCDate() + diff);
-  return value;
-}
-
-function formatMonthDay(date: Date): string {
-  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getUTCDate()}`.padStart(2, '0');
-  return `${month}/${day}`;
 }
