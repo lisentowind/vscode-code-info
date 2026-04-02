@@ -3,7 +3,7 @@ import path from 'node:path';
 import * as vscode from 'vscode';
 import { analyzeGitTodayChanges } from '../git/today';
 import type { Logger, TodayDeletedFile, TodayFileStat, TodayStats } from '../types';
-import { createPresetDateRange, formatDateRangeLabel } from './dateRange';
+import { createPresetDateRange, formatDateRangeLabel, type AnalysisDateRangePreset } from './dateRange';
 import { collectAnalyzedFiles } from './shared';
 import { findWorkspaceFilesForAnalysis, getWorkerCount, isBinaryLike } from './targets';
 import { buildLanguageSummaries } from './summaries';
@@ -13,6 +13,13 @@ type FileTimestampStatus =
   | { kind: 'touch'; status: 'new' | 'modified'; modifiedAt: string };
 
 export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats> {
+  return analyzeRangeWorkspace('today', logger);
+}
+
+export async function analyzeRangeWorkspace(
+  preset: AnalysisDateRangePreset,
+  logger?: Logger
+): Promise<TodayStats> {
   const startTime = Date.now();
   const folders = vscode.workspace.workspaceFolders;
 
@@ -23,9 +30,9 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
   const { uris, gitRoot, scopeSummary } = await findWorkspaceFilesForAnalysis(folders, logger);
   const textUris = uris.filter((uri) => !isBinaryLike(uri));
   const initialBinarySkips = uris.length - textUris.length;
-  const todayRange = createPresetDateRange('today');
-  const gitSinceLabel = formatDateRangeLabel(todayRange.start, todayRange.end);
-  const gitChanges = await analyzeGitTodayChanges(gitRoot, todayRange.start);
+  const range = createPresetDateRange(preset);
+  const gitSinceLabel = formatDateRangeLabel(range.start, range.end);
+  const gitChanges = await analyzeGitTodayChanges(gitRoot, range.start);
   const deletedFiles: TodayDeletedFile[] = gitChanges.available
     ? gitChanges.deletedFiles
       .map((filePath) => {
@@ -44,7 +51,7 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
     skippedUnreadableFiles
   } = await collectAnalyzedFiles<TodayFileStat, Extract<FileTimestampStatus, { kind: 'touch' }>>(textUris, {
     prepare: async (uri) => {
-      const timestampStatus = await getTodayStatus(uri, todayRange.start);
+      const timestampStatus = await getTodayStatus(uri, range.start);
       return timestampStatus.kind === 'touch' ? timestampStatus : undefined;
     },
     mapFile: ({ file, prepared }) => ({
@@ -104,6 +111,8 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
   return {
     workspaceName: folders.length === 1 ? folders[0].name : 'Multi-root Workspace',
     generatedAt: new Date().toLocaleString(),
+    rangePreset: preset,
+    rangeLabel: range.label,
     totals,
     languages,
     touchedFiles: sortedTouchedFiles.slice(0, 20),

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { analyzeTodayWorkspace } from './analysis/todayAnalyzer';
+import { analyzeRangeWorkspace } from './analysis/todayAnalyzer';
+import type { AnalysisDateRangePreset } from './analysis/dateRange';
 import { analyzeWorkspace } from './analysis/workspaceAnalyzer';
 import { exportStatsFile } from './export/exporter';
 import { showDashboardEmptyPanel, showEmptyIfOpen, showStatsPanel, updatePanelIfOpen, type DashboardPanelState } from './ui/panels';
@@ -11,6 +12,7 @@ import type { DashboardData, TodayStats, WorkspaceStats } from './types';
 
 let latestProjectStats: WorkspaceStats | undefined;
 let latestTodayStats: TodayStats | undefined;
+let latestRangePreset: AnalysisDateRangePreset = 'today';
 let refreshTodayTask: Promise<TodayStats | undefined> | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 const dashboardPanelState: DashboardPanelState = { panel: undefined };
@@ -24,8 +26,8 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar);
 
   let sidebarProvider: CodeInfoSidebarProvider;
-  const refreshToday = async (): Promise<void> => {
-    await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
+  const refreshToday = async (preset?: AnalysisDateRangePreset): Promise<void> => {
+    await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true, preset });
   };
   sidebarProvider = new CodeInfoSidebarProvider(context.extensionUri, handleWebviewCommand, refreshToday);
   sidebarProvider.render(getDashboardData());
@@ -66,7 +68,13 @@ export function activate(context: vscode.ExtensionContext): void {
       await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
     }),
     vscode.commands.registerCommand('codeInfo.refreshTodayStats', async () => {
-      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
+      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true, preset: 'today' });
+    }),
+    vscode.commands.registerCommand('codeInfo.refreshLast7DaysStats', async () => {
+      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true, preset: 'last7Days' });
+    }),
+    vscode.commands.registerCommand('codeInfo.refreshLast30DaysStats', async () => {
+      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true, preset: 'last30Days' });
     }),
     vscode.commands.registerCommand('codeInfo.export', async () => {
       const stats = await ensureStats(sidebarProvider);
@@ -164,7 +172,7 @@ function getDashboardData(): DashboardData {
 async function refreshTodayAndRender(
   sidebarProvider: CodeInfoSidebarProvider,
   statusBar: CodeInfoStatusBarController,
-  options: { revealPanel: boolean; silent: boolean }
+  options: { revealPanel: boolean; silent: boolean; preset?: AnalysisDateRangePreset }
 ): Promise<TodayStats | undefined> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) {
@@ -176,10 +184,11 @@ async function refreshTodayAndRender(
     return refreshTodayTask;
   }
 
+  latestRangePreset = options.preset ?? latestRangePreset;
   statusBar.setLoading(true);
   refreshTodayTask = (async () => {
     try {
-      const stats = await analyzeTodayWorkspace(outputChannel);
+      const stats = await analyzeRangeWorkspace(latestRangePreset, outputChannel);
       latestTodayStats = stats;
       sidebarProvider.render(getDashboardData());
       statusBar.update(latestTodayStats);
@@ -188,7 +197,7 @@ async function refreshTodayAndRender(
     } catch (error) {
       if (!options.silent) {
         const message = error instanceof Error ? error.message : String(error);
-        void vscode.window.showErrorMessage(`Code Info 今日统计失败：${message}`);
+        void vscode.window.showErrorMessage(`Code Info 范围统计失败：${message}`);
       }
       return undefined;
     } finally {

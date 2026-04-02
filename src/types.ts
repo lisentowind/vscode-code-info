@@ -155,6 +155,8 @@ export type TodayInsights = {
 export type TodayStats = {
   workspaceName: string;
   generatedAt: string;
+  rangePreset: 'today' | 'last7Days' | 'last30Days';
+  rangeLabel: string;
   totals: TodayTotals;
   languages: LanguageSummary[];
   touchedFiles: TodayFileStat[];

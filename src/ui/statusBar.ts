@@ -8,7 +8,7 @@ export class CodeInfoStatusBarController implements vscode.Disposable {
 
   public constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    this.item.name = '代码信息今日统计';
+    this.item.name = '代码信息范围统计';
     this.item.command = 'codeInfo.openPanel';
     this.render();
   }
@@ -34,7 +34,7 @@ export class CodeInfoStatusBarController implements vscode.Disposable {
       return;
     }
 
-    this.item.text = this.loading ? '$(sync~spin) 今' : createStatusBarText(this.todayStats);
+    this.item.text = this.loading ? '$(sync~spin) 统' : createStatusBarText(this.todayStats);
     this.item.tooltip = this.loading ? createLoadingTooltip() : createTooltip(this.todayStats);
     this.item.show();
   }
@@ -43,16 +43,17 @@ export class CodeInfoStatusBarController implements vscode.Disposable {
 function createLoadingTooltip(): vscode.MarkdownString {
   const tooltip = new vscode.MarkdownString(undefined, true);
   tooltip.supportThemeIcons = true;
-  tooltip.appendMarkdown('$(sync~spin) **今日统计加载中**  \n正在刷新今天有变更的文件。  \n\n单击打开看板。');
+  tooltip.appendMarkdown('$(sync~spin) **范围统计加载中**  \n正在刷新当前时间范围内有变更的文件。  \n\n单击打开看板。');
   return tooltip;
 }
 
 function createTooltip(todayStats: TodayStats | undefined): vscode.MarkdownString {
   const tooltip = new vscode.MarkdownString(undefined, true);
   tooltip.supportThemeIcons = true;
+  const rangeLabel = todayStats?.rangeLabel ?? '今天';
 
   if (!todayStats) {
-    tooltip.appendMarkdown('$(graph) **今日统计**  \n今天还没有检测到变更文件。  \n\n单击打开看板。');
+    tooltip.appendMarkdown('$(graph) **范围统计**  \n当前还没有检测到范围内的变更文件。  \n\n单击打开看板。');
     return tooltip;
   }
 
@@ -63,14 +64,14 @@ function createTooltip(todayStats: TodayStats | undefined): vscode.MarkdownStrin
   const latestFile = todayStats.insights.topPath ? trimText(todayStats.insights.topPath, 28) : '暂无';
   const updatedAt = formatTime(todayStats.generatedAt);
   const gitLine = todayStats.analysisMeta.gitAvailable
-    ? `Git（${escapeMarkdown(todayStats.analysisMeta.gitSince || '今日 00:00')} 起）：+${todayStats.totals.addedLines} / -${todayStats.totals.deletedLines} 行，删除 ${todayStats.totals.deletedFiles} 文件`
+    ? `Git（${escapeMarkdown(todayStats.analysisMeta.gitSince || rangeLabel)} 起）：+${todayStats.totals.addedLines} / -${todayStats.totals.deletedLines} 行，删除 ${todayStats.totals.deletedFiles} 文件`
     : 'Git：不可用（无法统计删行/删文件）';
 
   tooltip.appendMarkdown(
     [
-      '$(graph) **今日统计**',
-      `今日变更 **${todayStats.totals.touchedFiles}** 个文件，其中新增 **${todayStats.totals.newFiles}** 个，修改 **${modifiedFiles}** 个`,
-      `变更 **${todayStats.analysisMeta.gitAvailable ? todayStats.totals.changedLines : 0}** 行（Git 今日提交），待办 **${todayStats.totals.todoCount}** 个，主语言 ${topLanguage}`,
+      `$(graph) **${escapeMarkdown(rangeLabel)}统计**`,
+      `${escapeMarkdown(rangeLabel)}变更 **${todayStats.totals.touchedFiles}** 个文件，其中新增 **${todayStats.totals.newFiles}** 个，修改 **${modifiedFiles}** 个`,
+      `变更 **${todayStats.analysisMeta.gitAvailable ? todayStats.totals.changedLines : 0}** 行（Git 范围提交），待办 **${todayStats.totals.todoCount}** 个，主语言 ${topLanguage}`,
       gitLine,
       `最近文件：${escapeMarkdown(latestFile)}，更新 ${escapeMarkdown(updatedAt)}`,
       '',
@@ -83,7 +84,7 @@ function createTooltip(todayStats: TodayStats | undefined): vscode.MarkdownStrin
 
 function createStatusBarText(todayStats: TodayStats | undefined): string {
   if (!todayStats) {
-    return '$(graph) 今日 0';
+    return '$(graph) 范围 0';
   }
 
   const modifiedFiles = Math.max(todayStats.totals.touchedFiles - todayStats.totals.newFiles, 0);

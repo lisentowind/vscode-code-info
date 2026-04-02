@@ -616,12 +616,14 @@ ${echartsScript}
     }
 
     const workspaceName = projectStats?.workspaceName || todayStats?.workspaceName || '当前工作区';
+    const rangeLabel = todayStats?.rangeLabel || '今天';
+    const rangeHeading = rangeLabel === '今天' ? '今日' : rangeLabel;
     const generatedAt = todayStats?.generatedAt || projectStats?.generatedAt;
     const generatedLabel = generatedAt ? new Date(generatedAt).toLocaleString() : '';
     const heroBadges = [];
-    if (todayStats) heroBadges.push('<span class="badge">今日变更 ' + numberFormat(todayStats.totals.touchedFiles) + ' 文件</span>');
-    if (todayStats) heroBadges.push('<span class="badge">今日新增 ' + numberFormat(todayStats.totals.newFiles) + ' 文件</span>');
-    if (todayStats && todayStats.totals.deletedFiles) heroBadges.push('<span class="badge">今日删除 ' + numberFormat(todayStats.totals.deletedFiles) + ' 文件</span>');
+    if (todayStats) heroBadges.push('<span class="badge">' + escapeHtml(rangeHeading) + '变更 ' + numberFormat(todayStats.totals.touchedFiles) + ' 文件</span>');
+    if (todayStats) heroBadges.push('<span class="badge">' + escapeHtml(rangeHeading) + '新增 ' + numberFormat(todayStats.totals.newFiles) + ' 文件</span>');
+    if (todayStats && todayStats.totals.deletedFiles) heroBadges.push('<span class="badge">' + escapeHtml(rangeHeading) + '删除 ' + numberFormat(todayStats.totals.deletedFiles) + ' 文件</span>');
     if (projectStats) heroBadges.push('<span class="badge">项目分析 ' + numberFormat(projectStats.totals.files) + ' 文件</span>');
     if (projectStats) heroBadges.push('<span class="badge">项目耗时 ' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '</span>');
     const metaParts = [];
@@ -633,9 +635,9 @@ ${echartsScript}
     const chipsHtml = heroBadges.slice(0, presentation.compact ? 2 : 4).join('');
 
     const quickActionsHtml = presentation.compact
-      ? '<button class="action" data-command="refreshToday">' + icon('refresh') + '刷新今日统计</button>' +
+      ? '<button class="action" data-command="refreshToday">' + icon('refresh') + '刷新今天</button>' +
         '<button class="action secondary" data-command="openPanel">' + icon('detail') + '详情分析</button>'
-      : '<button class="action" data-command="refreshToday">' + icon('refresh') + '刷新今日统计</button>' +
+      : '<button class="action" data-command="refreshToday">' + icon('refresh') + '刷新今天</button>' +
         '<button class="action" data-command="showStats">' + icon('project') + '开始项目分析</button>';
 
     const menuHtml =
@@ -644,7 +646,9 @@ ${echartsScript}
         '<div class="menu-popover" role="menu">' +
           '<div class="menu-group">' +
             '<div class="menu-title">分析</div>' +
-            '<button class="menu-item" data-command="refreshToday" role="menuitem">' + icon('refresh') + '<span class="menu-label">刷新今日统计</span><span class="menu-hint">Today</span></button>' +
+            '<button class="menu-item" data-command="refreshToday" role="menuitem">' + icon('refresh') + '<span class="menu-label">刷新今天</span><span class="menu-hint">Today</span></button>' +
+            '<button class="menu-item" data-command="refreshLast7Days" role="menuitem">' + icon('today') + '<span class="menu-label">最近 7 天</span><span class="menu-hint">7d</span></button>' +
+            '<button class="menu-item" data-command="refreshLast30Days" role="menuitem">' + icon('today') + '<span class="menu-label">最近 30 天</span><span class="menu-hint">30d</span></button>' +
             '<button class="menu-item" data-command="showStats" role="menuitem">' + icon('project') + '<span class="menu-label">开始项目分析</span><span class="menu-hint">Scan</span></button>' +
             '<button class="menu-item" data-command="refresh" role="menuitem">' + icon('refresh') + '<span class="menu-label">重新分析项目</span><span class="menu-hint">Re-run</span></button>' +
             '<button class="menu-item" data-command="selectScope" role="menuitem">' + icon('scope') + '<span class="menu-label">选择目录</span><span class="menu-hint">Scope</span></button>' +
@@ -662,7 +666,7 @@ ${echartsScript}
       '</details>';
 
     const navItems = [];
-    navItems.push('<button class="nav-item active" data-nav="ci-section-today" data-label="今日统计" aria-label="今日统计">' + icon('today') + '<span class="nav-text">今日统计</span></button>');
+    navItems.push('<button class="nav-item active" data-nav="ci-section-today" data-label="范围统计" aria-label="范围统计">' + icon('today') + '<span class="nav-text">范围统计</span></button>');
     navItems.push('<button class="nav-item" data-nav="ci-section-project" data-label="项目分析" aria-label="项目分析">' + icon('project') + '<span class="nav-text">项目分析</span></button>');
     if (projectStats) {
       navItems.push('<button class="nav-item" data-nav="ci-section-tree" data-label="目录树" aria-label="目录树">' + icon('tree') + '<span class="nav-text">目录树</span></button>');
@@ -674,10 +678,10 @@ ${echartsScript}
     const sidebarSummaryItems = [];
     if (todayStats) {
       sidebarSummaryItems.push(
-        '<div class="rail-chip" aria-label="今日变更 ' + numberFormat(todayStats.totals.touchedFiles) + ' 文件，新增 ' + numberFormat(todayStats.totals.newFiles) + '，删除 ' + numberFormat(todayStats.totals.deletedFiles) + '">' +
+        '<div class="rail-chip" aria-label="' + escapeHtml(rangeHeading) + '变更 ' + numberFormat(todayStats.totals.touchedFiles) + ' 文件，新增 ' + numberFormat(todayStats.totals.newFiles) + '，删除 ' + numberFormat(todayStats.totals.deletedFiles) + '">' +
           icon('files') +
           '<div class="rail-value">' + numberFormat(todayStats.totals.touchedFiles) + '</div>' +
-          '<div class="rail-text">今日变更</div>' +
+          '<div class="rail-text">' + escapeHtml(rangeHeading) + '变更</div>' +
         '</div>'
       );
     }
@@ -696,9 +700,9 @@ ${echartsScript}
     const floatingBarHtml = !presentation.compact
       ? '' +
         '<div class="floatbar" aria-label="快捷操作">' +
-          '<button class="fab-button" style="--i:0" data-command="refreshToday" aria-label="刷新今日统计">' +
+          '<button class="fab-button" style="--i:0" data-command="refreshToday" aria-label="刷新今天">' +
             icon('refresh', 'fab-icon') +
-            '<span class="fab-label">刷新今日</span>' +
+            '<span class="fab-label">刷新今天</span>' +
           '</button>' +
           '<button class="fab-button" style="--i:1" data-command="' + projectActionCommand + '" aria-label="' + escapeHtml(projectActionLabel) + '">' +
             icon('project', 'fab-icon') +
@@ -755,33 +759,33 @@ ${echartsScript}
 
     if (todayStats) {
       html += '' +
-        '<section class="panel" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="section-note">新增/修改基于文件时间戳；删除文件与增删行（如有）基于 Git 今日提交。</div></section>' +
+        '<section class="panel" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>' + escapeHtml(rangeHeading) + '统计分析</h2></div><div class="section-note">新增/修改基于文件时间戳；删除文件与增删行（如有）基于当前时间范围内的 Git 提交。</div></section>' +
         '<section class="cards">' +
-          metricCard('今日变更文件', numberFormat(todayStats.totals.touchedFiles), '今天被修改或新增的文本文件', 'files') +
-          metricCard('今日新增文件', numberFormat(todayStats.totals.newFiles), '通过文件创建时间判断的新文件', 'newFile') +
-          metricCard('今日删除文件', numberFormat(todayStats.totals.deletedFiles), '基于 Git 今日提交（如可用）', 'deletedFile') +
-          metricCard('今日代码变更', '+' + numberFormat(todayStats.totals.addedLines) + ' / -' + numberFormat(todayStats.totals.deletedLines), '基于 Git 今日提交（如可用）', 'diff') +
-          metricCard('今日变更行', todayStats.analysisMeta.gitAvailable ? numberFormat(todayStats.totals.changedLines) : '—', 'added + deleted（仅统计今日提交）', 'lines') +
-          metricCard('今日待办数', numberFormat(todayStats.totals.todoCount), '变更文件中的 TODO / FIXME / HACK', 'todo') +
+          metricCard(rangeHeading + '变更文件', numberFormat(todayStats.totals.touchedFiles), '当前范围内被修改或新增的文本文件', 'files') +
+          metricCard(rangeHeading + '新增文件', numberFormat(todayStats.totals.newFiles), '通过文件创建时间判断的新文件', 'newFile') +
+          metricCard(rangeHeading + '删除文件', numberFormat(todayStats.totals.deletedFiles), '基于当前范围内的 Git 提交（如可用）', 'deletedFile') +
+          metricCard(rangeHeading + '代码变更', '+' + numberFormat(todayStats.totals.addedLines) + ' / -' + numberFormat(todayStats.totals.deletedLines), '基于当前范围内的 Git 提交（如可用）', 'diff') +
+          metricCard(rangeHeading + '变更行', todayStats.analysisMeta.gitAvailable ? numberFormat(todayStats.totals.changedLines) : '—', 'added + deleted（仅统计当前范围提交）', 'lines') +
+          metricCard(rangeHeading + '待办数', numberFormat(todayStats.totals.todoCount), '变更文件中的 TODO / FIXME / HACK', 'todo') +
           metricCard('主力语言', todayStats.insights.topLanguage, percent(todayStats.insights.topLanguageShare, 1) + ' 占比', 'language') +
           metricCard('最近活跃文件', todayStats.insights.topPath, '按更新时间和代码量排序', 'detail') +
         '</section>' +
         '<section class="grid">' +
-          '<div class="panel"><div class="section-title">' + icon('language') + '<h2>今日语言分布</h2></div><div class="section-note">按今日变更文件的代码行统计（支持 hover 查看详情）。</div><div class="chart" id="chart-today-language"></div><div class="bars chart-fallback">' + renderBarList(todayStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '今日暂无语言数据') + '</div></div>' +
-          '<div class="panel"><div class="section-title">' + icon('meta') + '<h2>今日元信息</h2></div><div class="section-note">本模块只在视图可见时刷新，避免长期常驻分析。</div><div class="todo-summary">' +
+          '<div class="panel"><div class="section-title">' + icon('language') + '<h2>' + escapeHtml(rangeHeading) + '语言分布</h2></div><div class="section-note">按当前范围内变更文件的代码行统计（支持 hover 查看详情）。</div><div class="chart" id="chart-today-language"></div><div class="bars chart-fallback">' + renderBarList(todayStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '当前范围暂无语言数据') + '</div></div>' +
+          '<div class="panel"><div class="section-title">' + icon('meta') + '<h2>' + escapeHtml(rangeHeading) + '元信息</h2></div><div class="section-note">本模块只在视图可见时刷新，避免长期常驻分析。</div><div class="todo-summary">' +
             '<div class="todo-item"><span>扫描范围</span><span class="muted">' + escapeHtml(todayStats.analysisMeta.scopeSummary) + '</span></div>' +
             '<div class="todo-item"><span>匹配文件</span><span class="muted">' + numberFormat(todayStats.analysisMeta.matchedFiles) + '</span></div>' +
-            '<div class="todo-item"><span>今日变更</span><span class="muted">' + numberFormat(todayStats.analysisMeta.analyzedFiles) + '</span></div>' +
-            '<div class="todo-item"><span>Git 统计</span><span class="muted">' + (todayStats.analysisMeta.gitAvailable ? ('从 ' + escapeHtml(todayStats.analysisMeta.gitSince || '今日 00:00') + ' 起') : '不可用') + '</span></div>' +
+            '<div class="todo-item"><span>范围变更</span><span class="muted">' + numberFormat(todayStats.analysisMeta.analyzedFiles) + '</span></div>' +
+            '<div class="todo-item"><span>Git 统计</span><span class="muted">' + (todayStats.analysisMeta.gitAvailable ? ('从 ' + escapeHtml(todayStats.analysisMeta.gitSince || rangeLabel) + ' 起') : '不可用') + '</span></div>' +
             '<div class="todo-item"><span>耗时</span><span class="muted">' + escapeHtml(durationFormat(todayStats.analysisMeta.durationMs)) + '</span></div>' +
           '</div></div>' +
         '</section>' +
-        '<section class="panel"><div class="section-title">' + icon('newFile') + '<h2>今日新增文件</h2></div><div class="section-note">今天首次创建的文件。</div>' + renderTodayFiles(todayStats.newFiles, '今天还没有检测到新增文件。') + '</section>' +
-        '<section class="panel"><div class="section-title">' + icon('files') + '<h2>今日变更文件</h2></div><div class="section-note">今天新增或修改过的文件清单，点击文件名可直接打开源码。</div>' + renderTodayFiles(todayStats.touchedFiles, '今天还没有检测到新增或修改过的文件。') + '</section>' +
-        (todayStats.totals.todoCount > 0 ? ('<section class="panel"><div class="section-title">' + icon('todo') + '<h2>今日待办清单</h2></div><div class="section-note">展示部分 TODO / FIXME / HACK 位置，点击可跳转到对应行。</div>' + renderTodoLocations(todayStats.todoLocations, '今日变更文件中未发现待办标记。') + '</section>') : '') +
-        '<section class="panel"><div class="section-title">' + icon('deletedFile') + '<h2>今日删除文件</h2></div><div class="section-note">' + (todayStats.analysisMeta.gitAvailable ? '基于 Git 今日提交，仅展示文件路径。' : '当前工作区没有可用的 Git 数据，无法统计删除文件。') + '</div>' + renderDeletedFiles(todayStats.deletedFiles, '今天还没有检测到删除文件。') + '</section>';
+        '<section class="panel"><div class="section-title">' + icon('newFile') + '<h2>' + escapeHtml(rangeHeading) + '新增文件</h2></div><div class="section-note">当前范围内首次创建的文件。</div>' + renderTodayFiles(todayStats.newFiles, '当前范围内还没有检测到新增文件。') + '</section>' +
+        '<section class="panel"><div class="section-title">' + icon('files') + '<h2>' + escapeHtml(rangeHeading) + '变更文件</h2></div><div class="section-note">当前范围内新增或修改过的文件清单，点击文件名可直接打开源码。</div>' + renderTodayFiles(todayStats.touchedFiles, '当前范围内还没有检测到新增或修改过的文件。') + '</section>' +
+        (todayStats.totals.todoCount > 0 ? ('<section class="panel"><div class="section-title">' + icon('todo') + '<h2>' + escapeHtml(rangeHeading) + '待办清单</h2></div><div class="section-note">展示部分 TODO / FIXME / HACK 位置，点击可跳转到对应行。</div>' + renderTodoLocations(todayStats.todoLocations, '当前范围变更文件中未发现待办标记。') + '</section>') : '') +
+        '<section class="panel"><div class="section-title">' + icon('deletedFile') + '<h2>' + escapeHtml(rangeHeading) + '删除文件</h2></div><div class="section-note">' + (todayStats.analysisMeta.gitAvailable ? '基于当前时间范围内的 Git 提交，仅展示文件路径。' : '当前工作区没有可用的 Git 数据，无法统计删除文件。') + '</div>' + renderDeletedFiles(todayStats.deletedFiles, '当前范围内还没有检测到删除文件。') + '</section>';
     } else {
-      html += '<section class="panel" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>今日统计分析</h2></div><div class="empty-note">当前还没有今日统计数据。切到插件时会自动刷新，也可以手动点击“刷新今日统计”。</div></section>';
+      html += '<section class="panel" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>范围统计分析</h2></div><div class="empty-note">当前还没有范围统计数据。切到插件时会自动刷新，也可以手动点击“刷新今天”。</div></section>';
     }
 
     if (!presentation.compact && projectStats) {

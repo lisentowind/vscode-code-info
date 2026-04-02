@@ -58,6 +58,18 @@
         "shortTitle": "今日"
       },
       {
+        "command": "codeInfo.refreshLast7DaysStats",
+        "title": "刷新最近 7 天统计",
+        "category": "代码信息",
+        "shortTitle": "7天"
+      },
+      {
+        "command": "codeInfo.refreshLast30DaysStats",
+        "title": "刷新最近 30 天统计",
+        "category": "代码信息",
+        "shortTitle": "30天"
+      },
+      {
         "command": "codeInfo.export",
         "title": "导出",
         "category": "代码信息",

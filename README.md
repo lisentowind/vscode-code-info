@@ -5,7 +5,7 @@
 ## 已实现功能
 
 - 工作区代码统计：文件总数、总行数、代码行、注释行、空行、体积
-- 今日统计分析：切到插件时自动刷新当天新增/修改文件，不做实时常驻分析；若是 Git 仓库，补充今日提交的删文件与增删行统计
+- 范围统计分析：切到插件时默认自动刷新当天新增/修改文件，也可手动切换到最近 7 天 / 最近 30 天；若是 Git 仓库，会补充对应时间范围内提交的删文件与增删行统计
 - 更精确的多语言注释识别：支持行内块注释、避免字符串内注释误判（近似解析）
 - 语言分布分析：按语言聚合文件数、总代码量和体积
 - 模块/目录分布：按顶层或多级目录聚合代码规模，快速识别核心模块
@@ -31,6 +31,8 @@ npm run compile
 
 - 命令面板执行 `Code Info: Analyze Workspace`
 - 命令面板执行 `Code Info: Refresh Today Stats` 可手动刷新今日统计
+- 命令面板执行 `Code Info: Refresh Last 7 Days Stats` 可查看最近 7 天范围统计
+- 命令面板执行 `Code Info: Refresh Last 30 Days Stats` 可查看最近 30 天范围统计
 - 如需只分析部分目录：执行 `Code Info: Select Analysis Directories`，或在设置里配置 `codeInfo.analysis.directories`
 - 点击左侧 Activity Bar 的 `Code Info` 图标查看侧边栏概览
 - 在看板或侧边栏中点击按钮导出 `JSON` / `CSV`
@@ -42,7 +44,7 @@ npm run compile
 - 基于官方扩展结构，入口文件为 `src/extension.ts`
 - 使用 `vscode.workspace.findFiles` 扫描工作区文件
 - 分析器采用分批并发读取、按行流式处理文本，减少大仓库统计时的内存分配
-- 今日统计仅在插件视图可见时刷新，并且只读取当天触达文件的内容，避免实时全量分析
+- 范围统计仅在插件视图可见时刷新，并且只读取对应时间范围内触达文件的内容，避免实时全量分析
 - 使用 `WebviewPanel` 实现详细 Dashboard
 - 使用 `WebviewViewProvider` 实现侧边栏视图
 - 内置纯前端图表，不依赖外部 CDN，方便本地调试和打包
