@@ -204,3 +204,151 @@ export type PresentationMode = {
 export type Logger = {
   appendLine(message: string): void;
 };
+
+export type CompareSource = 'current-branch' | 'commits';
+
+export type CompareRequest =
+  | {
+      mode: 'branch';
+      baseRef?: string;
+      headRef?: string;
+    }
+  | {
+      mode: 'commit';
+      baseRef: string;
+      headRef: string;
+    };
+
+export type CompareResolvedTargets = {
+  source: CompareSource;
+  baseRef: string;
+  headRef: string;
+};
+
+export type CompareFileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'binary' | 'submodule';
+
+export type CompareRawDiffRow = {
+  status: CompareFileStatus;
+  path: string;
+  oldPath?: string;
+  isSubmodule: boolean;
+};
+
+export type CompareNumstatRow = {
+  path: string;
+  oldPath?: string;
+  addedLines: number;
+  deletedLines: number;
+  isBinary: boolean;
+};
+
+export type CompareDiffRow = CompareRawDiffRow & {
+  addedLines: number;
+  deletedLines: number;
+  isBinary: boolean;
+};
+
+export type CompareTextSnapshot = {
+  ref: string;
+  path: string;
+  content: string;
+  file: FileStat;
+};
+
+export type CompareSnapshotAvailability = 'none' | 'before-only' | 'after-only' | 'both';
+
+export type CompareNotTextComparableReason = 'binary' | 'submodule';
+
+export type CompareOpenTarget =
+  | {
+      kind: 'workspace';
+      resource: string;
+    }
+  | {
+      kind: 'snapshot';
+      title: string;
+      content: string;
+      language?: string;
+    }
+  | {
+      kind: 'none';
+    };
+
+export type CompareFileOpenTargets = {
+  path: CompareOpenTarget;
+  oldPath?: CompareOpenTarget;
+};
+
+export type CompareFileSnapshot = CompareDiffRow & {
+  before?: CompareTextSnapshot;
+  after?: CompareTextSnapshot;
+  snapshotAvailability: CompareSnapshotAvailability;
+  textComparable: boolean;
+  notTextComparableReason?: CompareNotTextComparableReason;
+  openTargets: CompareFileOpenTargets;
+};
+
+export type CompareSummary = {
+  changedFiles: number;
+  newFiles: number;
+  deletedFiles: number;
+  addedLines: number;
+  deletedLines: number;
+  netCodeLines: number;
+  todoDelta: number;
+};
+
+export type CompareLanguageDelta = {
+  language: string;
+  beforeFiles: number;
+  afterFiles: number;
+  beforeCodeLines: number;
+  afterCodeLines: number;
+  deltaCodeLines: number;
+  deltaTodo: number;
+};
+
+export type CompareDirectoryDelta = {
+  path: string;
+  beforeFiles: number;
+  afterFiles: number;
+  beforeCodeLines: number;
+  afterCodeLines: number;
+  deltaCodeLines: number;
+  deltaTodo: number;
+};
+
+export type CompareHotspot = {
+  path: string;
+  oldPath?: string;
+  status: CompareFileStatus;
+  addedLines: number;
+  deletedLines: number;
+  changedLines: number;
+};
+
+export type CompareAnalysisMeta = {
+  durationMs: number;
+  totalFiles: number;
+  textComparableFiles: number;
+  skippedBinaryFiles: number;
+  skippedSubmoduleFiles: number;
+};
+
+export type CompareSummaryResult = {
+  summary: CompareSummary;
+  languages: CompareLanguageDelta[];
+  directories: CompareDirectoryDelta[];
+  hotspots: CompareHotspot[];
+};
+
+export type CompareStats = {
+  compareSource: CompareSource;
+  resolvedTargets: CompareResolvedTargets;
+  summary: CompareSummary;
+  files: CompareFileSnapshot[];
+  languages: CompareLanguageDelta[];
+  directories: CompareDirectoryDelta[];
+  hotspots: CompareHotspot[];
+  analysisMeta: CompareAnalysisMeta;
+};

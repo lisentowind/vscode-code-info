@@ -17,6 +17,7 @@
 - 侧边栏 Overview：在 Activity Bar 中随时查看概览
 - 导出能力：支持导出 `JSON` 和 `CSV`
 - Git 趋势：展示最近 12 周提交趋势和贡献者 Top 5
+- 变更对比：支持 `当前分支 vs main/master` 与 `两个 commit 对比`，可查看文件变化、语言/目录变化与热点文件
 
 ## 开发启动
 
@@ -33,8 +34,10 @@ npm run compile
 - 命令面板执行 `Code Info: Refresh Today Stats` 可手动刷新今日统计
 - 命令面板执行 `Code Info: Refresh Last 7 Days Stats` 可查看最近 7 天范围统计
 - 命令面板执行 `Code Info: Refresh Last 30 Days Stats` 可查看最近 30 天范围统计
+- 命令面板执行 `Code Info: Open Compare` 可打开独立的变更对比页面
 - 如需只分析部分目录：执行 `Code Info: Select Analysis Directories`，或在设置里配置 `codeInfo.analysis.directories`
 - 点击左侧 Activity Bar 的 `Code Info` 图标查看侧边栏概览
+- 在空态、侧边栏或完整看板中点击“变更对比”可进入独立 compare 页面
 - 在看板或侧边栏中点击按钮导出 `JSON` / `CSV`
 - 在看板表格中点击文件名可直接跳转到对应源码
 - 如果工作区是 Git 仓库，会自动展示最近 12 周提交趋势

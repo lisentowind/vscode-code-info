@@ -12,6 +12,7 @@ export function getEmptyStateHtml(
   const title = compact ? 'Code Info 侧边栏' : 'Code Info';
   const subtitle = compact ? '先切到插件加载今日统计，再按需执行项目分析。' : '先切到插件加载今日统计，再打开完整项目分析看板。';
   const openPanelButton = showOpenPanel ? '<button class="action secondary" data-command="openPanel">打开看板</button>' : '';
+  const openCompareButton = '<button class="action secondary" data-command="openCompare">变更对比</button>';
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -40,6 +41,7 @@ export function getEmptyStateHtml(
         <div class="toolbar">
           <button class="action" data-command="refreshToday">刷新今日统计</button>
           <button class="action" data-command="showStats">开始项目分析</button>
+          ${openCompareButton}
           ${openPanelButton}
         </div>
       </div>
@@ -57,7 +59,7 @@ export function getEmptyStateHtml(
               </span>
               <h1>还没有可展示的数据</h1>
             </div>
-            <p>建议按下面 3 步走一遍：先拿到“今日统计”，再按需做“项目分析”，最后在大面板里查看完整看板。</p>
+            <p>建议按下面 4 步走一遍：先拿到“今日统计”，再按需做“项目分析”，最后根据需要打开详细看板或变更对比。</p>
             <div class="steps">
               <div class="step">
                 <div class="step-text">
@@ -79,6 +81,13 @@ export function getEmptyStateHtml(
                   <div class="step-desc">更大空间展示今日 + 项目统计（适合长列表）。</div>
                 </div>
                 ${showOpenPanel ? '<button class="action secondary" data-command="openPanel">执行</button>' : '<button class="action secondary" disabled>不可用</button>'}
+              </div>
+              <div class="step">
+                <div class="step-text">
+                  <div class="step-title">4) 打开变更对比</div>
+                  <div class="step-desc">查看当前分支或两个 commit 之间的文件变化和结构化统计。</div>
+                </div>
+                <button class="action secondary" data-command="openCompare">执行</button>
               </div>
             </div>
             <p class="hint">提示：如果你只想分析某些目录，可先点“选择目录”（在看板顶部操作栏）。</p>
@@ -641,22 +650,35 @@ ${echartsScript}
     const metaHtml = metaParts.join('');
 
     const chipsHtml = heroBadges.slice(0, presentation.compact ? 2 : 4).join('');
+    const rangeMenuLabel = todayStats ? ('切换范围 · ' + rangeLabel) : '切换范围';
 
     const quickActionsHtml = presentation.compact
       ? '<button class="action" data-command="' + refreshRangeCommand + '">' + icon('refresh') + escapeHtml(refreshRangeLabel) + '</button>' +
+        '<button class="action secondary" data-command="openCompare">' + icon('git') + '变更对比</button>' +
         '<button class="action secondary" data-command="openPanel">' + icon('detail') + '详情分析</button>'
       : '<button class="action" data-command="' + refreshRangeCommand + '">' + icon('refresh') + escapeHtml(refreshRangeLabel) + '</button>' +
-        '<button class="action" data-command="showStats">' + icon('project') + '开始项目分析</button>';
+        '<button class="action" data-command="showStats">' + icon('project') + '开始项目分析</button>' +
+        '<button class="action secondary" data-command="openCompare">' + icon('git') + '变更对比</button>';
+
+    const rangeMenuHtml =
+      '<details class="menu menu-toolbar menu-range" id="__codeInfoRangeMenu">' +
+        '<summary class="action secondary" aria-label="切换统计范围">' + icon('today') + escapeHtml(rangeMenuLabel) + '</summary>' +
+        '<div class="menu-popover" role="menu">' +
+          '<div class="menu-group">' +
+            '<div class="menu-title">范围</div>' +
+            '<button class="menu-item" data-command="refreshToday" role="menuitem">' + icon('refresh') + '<span class="menu-label">今天</span><span class="menu-hint">' + escapeHtml(rangeLabel === '今天' ? '当前' : 'Today') + '</span></button>' +
+            '<button class="menu-item" data-command="refreshLast7Days" role="menuitem">' + icon('today') + '<span class="menu-label">最近 7 天</span><span class="menu-hint">' + escapeHtml(todayStats?.rangePreset === 'last7Days' ? '当前' : '7d') + '</span></button>' +
+            '<button class="menu-item" data-command="refreshLast30Days" role="menuitem">' + icon('today') + '<span class="menu-label">最近 30 天</span><span class="menu-hint">' + escapeHtml(todayStats?.rangePreset === 'last30Days' ? '当前' : '30d') + '</span></button>' +
+          '</div>' +
+        '</div>' +
+      '</details>';
 
     const menuHtml =
-      '<details class="menu" id="__codeInfoMenu">' +
-        '<summary class="action secondary" aria-label="打开操作菜单">' + icon('menu') + '操作</summary>' +
+      '<details class="menu menu-toolbar" id="__codeInfoMenu">' +
+        '<summary class="action secondary" aria-label="打开操作菜单">' + icon('menu') + '更多操作</summary>' +
         '<div class="menu-popover" role="menu">' +
           '<div class="menu-group">' +
             '<div class="menu-title">分析</div>' +
-            '<button class="menu-item" data-command="refreshToday" role="menuitem">' + icon('refresh') + '<span class="menu-label">刷新今天</span><span class="menu-hint">Today</span></button>' +
-            '<button class="menu-item" data-command="refreshLast7Days" role="menuitem">' + icon('today') + '<span class="menu-label">最近 7 天</span><span class="menu-hint">7d</span></button>' +
-            '<button class="menu-item" data-command="refreshLast30Days" role="menuitem">' + icon('today') + '<span class="menu-label">最近 30 天</span><span class="menu-hint">30d</span></button>' +
             '<button class="menu-item" data-command="showStats" role="menuitem">' + icon('project') + '<span class="menu-label">开始项目分析</span><span class="menu-hint">Scan</span></button>' +
             '<button class="menu-item" data-command="refresh" role="menuitem">' + icon('refresh') + '<span class="menu-label">重新分析项目</span><span class="menu-hint">Re-run</span></button>' +
             '<button class="menu-item" data-command="selectScope" role="menuitem">' + icon('scope') + '<span class="menu-label">选择目录</span><span class="menu-hint">Scope</span></button>' +
@@ -664,6 +686,7 @@ ${echartsScript}
           '<div class="menu-group">' +
             '<div class="menu-title">视图</div>' +
             '<button class="menu-item" data-command="openPanel" role="menuitem">' + icon('detail') + '<span class="menu-label">打开详细看板</span><span class="menu-hint">Panel</span></button>' +
+            '<button class="menu-item" data-command="openCompare" role="menuitem">' + icon('git') + '<span class="menu-label">打开变更对比</span><span class="menu-hint">Compare</span></button>' +
           '</div>' +
           '<div class="menu-group">' +
             '<div class="menu-title">导出</div>' +
@@ -720,11 +743,15 @@ ${echartsScript}
             icon('scope', 'fab-icon') +
             '<span class="fab-label">选择目录</span>' +
           '</button>' +
-          '<button class="fab-button" style="--i:3" data-command="exportJson" aria-label="导出 JSON"' + (projectStats ? '' : ' disabled') + '>' +
+          '<button class="fab-button" style="--i:3" data-command="openCompare" aria-label="变更对比">' +
+            icon('git', 'fab-icon') +
+            '<span class="fab-label">变更对比</span>' +
+          '</button>' +
+          '<button class="fab-button" style="--i:4" data-command="exportJson" aria-label="导出 JSON"' + (projectStats ? '' : ' disabled') + '>' +
             icon('json', 'fab-icon') +
             '<span class="fab-label">导出 JSON</span>' +
           '</button>' +
-          '<button class="fab-button" style="--i:4" data-command="exportCsv" aria-label="导出 CSV"' + (projectStats ? '' : ' disabled') + '>' +
+          '<button class="fab-button" style="--i:5" data-command="exportCsv" aria-label="导出 CSV"' + (projectStats ? '' : ' disabled') + '>' +
             icon('csv', 'fab-icon') +
             '<span class="fab-label">导出 CSV</span>' +
           '</button>' +
@@ -751,12 +778,10 @@ ${echartsScript}
               '<div class="brand-meta">' + metaHtml + '</div>' +
             '</div>' +
           '</div>' +
-          (presentation.compact
-            ? ('<div class="topbar-right">' +
-                '<div class="chips">' + chipsHtml + '</div>' +
-                '<div class="toolbar">' + quickActionsHtml + menuHtml + '</div>' +
-              '</div>')
-            : '') +
+          ('<div class="topbar-right">' +
+            '<div class="chips">' + chipsHtml + '</div>' +
+            '<div class="toolbar">' + rangeMenuHtml + quickActionsHtml + menuHtml + '</div>' +
+          '</div>') +
         '</div>' +
       '</header>';
 
@@ -865,34 +890,37 @@ ${echartsScript}
       const ro = new ResizeObserver(() => scheduleStickyTop());
       ro.observe(topbarInner);
     }
-    const menu = document.getElementById('__codeInfoMenu');
-    let isMenuOpen = false;
-    const closeOpenMenu = () => {
-      if (!(menu instanceof HTMLDetailsElement)) return;
-      if (!isMenuOpen) return;
-      menu.open = false;
-      isMenuOpen = false;
-      scheduleStickyTop();
+    const menus = Array.from(document.querySelectorAll('details.menu')).filter((menu) => menu instanceof HTMLDetailsElement);
+    const closeOpenMenus = (exceptMenu) => {
+      let didClose = false;
+      for (const menu of menus) {
+        if (!(menu instanceof HTMLDetailsElement)) continue;
+        if (exceptMenu && menu === exceptMenu) continue;
+        if (!menu.open) continue;
+        menu.open = false;
+        didClose = true;
+      }
+      if (didClose) scheduleStickyTop();
     };
-    if (menu instanceof HTMLDetailsElement) {
-      isMenuOpen = menu.open;
+    for (const menu of menus) {
+      if (!(menu instanceof HTMLDetailsElement)) continue;
       menu.addEventListener('toggle', () => {
-        isMenuOpen = menu.open;
+        if (menu.open) closeOpenMenus(menu);
         scheduleStickyTop();
       });
     }
     document.addEventListener('pointerdown', (event) => {
-      if (!(menu instanceof HTMLDetailsElement)) return;
-      if (!isMenuOpen) return;
-      if (event.target instanceof Node && menu.contains(event.target)) return;
-      closeOpenMenu();
+      const hasOpenMenu = menus.some((menu) => menu instanceof HTMLDetailsElement && menu.open);
+      if (!hasOpenMenu) return;
+      if (event.target instanceof Node && menus.some((menu) => menu instanceof HTMLDetailsElement && menu.contains(event.target))) return;
+      closeOpenMenus();
     }, { capture: true });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') closeOpenMenu();
+      if (event.key === 'Escape') closeOpenMenus();
     });
     window.addEventListener('scroll', () => {
-      if (!isMenuOpen) return;
-      closeOpenMenu();
+      if (!menus.some((menu) => menu instanceof HTMLDetailsElement && menu.open)) return;
+      closeOpenMenus();
     }, { passive: true });
     scheduleStickyTop();
     if (document.fonts?.ready) {
@@ -930,7 +958,7 @@ ${echartsScript}
         character: Number.isFinite(character) ? character : undefined
       });
       if (element.closest('details.menu')) {
-        closeOpenMenu();
+        closeOpenMenus();
       }
     });
   </script>

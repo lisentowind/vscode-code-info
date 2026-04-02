@@ -46,6 +46,12 @@
         "shortTitle": "看板"
       },
       {
+        "command": "codeInfo.openCompare",
+        "title": "打开变更对比",
+        "category": "代码信息",
+        "shortTitle": "对比"
+      },
+      {
         "command": "codeInfo.refreshStats",
         "title": "刷新统计",
         "category": "代码信息",
@@ -136,9 +142,14 @@
           "group": "navigation"
         },
         {
-          "command": "codeInfo.selectAnalysisDirectories",
+          "command": "codeInfo.openCompare",
           "when": "view == codeInfo.sidebar",
           "group": "navigation@0"
+        },
+        {
+          "command": "codeInfo.selectAnalysisDirectories",
+          "when": "view == codeInfo.sidebar",
+          "group": "navigation@0.5"
         },
         {
           "command": "codeInfo.refreshStats",

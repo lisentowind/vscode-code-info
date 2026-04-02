@@ -31,6 +31,9 @@ export async function handleWebviewCommand(message?: WebviewCommandMessage): Pro
     case 'openPanel':
       await vscode.commands.executeCommand('codeInfo.openPanel');
       return;
+    case 'openCompare':
+      await vscode.commands.executeCommand('codeInfo.openCompare');
+      return;
     case 'exportJson':
       await vscode.commands.executeCommand('codeInfo.exportJson');
       return;

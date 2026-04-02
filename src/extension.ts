@@ -4,6 +4,7 @@ import type { AnalysisDateRangePreset } from './analysis/dateRange';
 import { analyzeWorkspace } from './analysis/workspaceAnalyzer';
 import { exportStatsFile } from './export/exporter';
 import { showDashboardEmptyPanel, showEmptyIfOpen, showStatsPanel, updatePanelIfOpen, type DashboardPanelState } from './ui/panels';
+import { createInitialComparePanelState, showComparePanel, type ComparePanelControllerState } from './ui/comparePanel';
 import { CodeInfoSidebarProvider } from './ui/sidebar';
 import { selectAnalysisDirectories } from './ui/scopePicker';
 import { CodeInfoStatusBarController } from './ui/statusBar';
@@ -16,6 +17,10 @@ let latestRangePreset: AnalysisDateRangePreset = 'today';
 let refreshTodayTask: Promise<TodayStats | undefined> | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 const dashboardPanelState: DashboardPanelState = { panel: undefined };
+const comparePanelState: ComparePanelControllerState = {
+  panel: undefined,
+  state: createInitialComparePanelState()
+};
 
 export function activate(context: vscode.ExtensionContext): void {
   outputChannel = vscode.window.createOutputChannel('Code Info');
@@ -35,6 +40,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(CodeInfoSidebarProvider.viewType, sidebarProvider),
+    vscode.commands.registerCommand('codeInfo.openCompare', async () => {
+      showComparePanel(comparePanelState, context.extensionUri);
+    }),
     vscode.commands.registerCommand('codeInfo.showStats', async () => {
       const stats = await analyzeAndSync(sidebarProvider, { revealPanel: true });
       if (!latestTodayStats) {

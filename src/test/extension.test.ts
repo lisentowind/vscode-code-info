@@ -7,7 +7,7 @@ import { buildDirectorySummaries, buildDirectoryTree } from '../analysis/summari
 import { sortTouchedFiles } from '../analysis/todayAnalyzer';
 import { buildWeeklyBuckets, getWeekBucketKey, parseDeletedFilesOutput, parseNumstatOutput } from '../git/common';
 import { createDashboardPanelOptions, getDashboardPanelTitle } from '../ui/panels';
-import { getDashboardHtml } from '../webview/templates';
+import { getDashboardHtml, getEmptyStateHtml } from '../webview/templates';
 import type { TextFileAnalysisResult } from '../analysis/fileAnalyzer';
 import type { FileStat } from '../types';
 
@@ -380,5 +380,142 @@ suite('Extension Test Suite', () => {
     assert.ok(html.includes('Git 统计起点'));
     assert.ok(html.includes('分析耗时'));
     assert.ok(!html.includes('今天元信息'));
+  });
+
+  test('non-compact dashboard renders visible range switch entry in topbar', () => {
+    const html = getDashboardHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {
+        todayStats: {
+          workspaceName: 'demo',
+          generatedAt: new Date(2026, 3, 2, 10, 0, 0).toLocaleString(),
+          rangePreset: 'last30Days',
+          rangeLabel: '最近 30 天',
+          totals: {
+            touchedFiles: 3,
+            newFiles: 1,
+            deletedFiles: 0,
+            lines: 20,
+            codeLines: 10,
+            commentLines: 5,
+            blankLines: 5,
+            bytes: 200,
+            todoCount: 2,
+            addedLines: 5,
+            deletedLines: 2,
+            changedLines: 7
+          },
+          languages: [],
+          touchedFiles: [],
+          newFiles: [],
+          deletedFiles: [],
+          todoLocations: [],
+          insights: {
+            topLanguage: 'typescript',
+            topLanguageShare: 1,
+            topPath: 'src/a.ts',
+            todoTouchedCount: 2
+          },
+          analysisMeta: {
+            durationMs: 123,
+            matchedFiles: 10,
+            analyzedFiles: 3,
+            skippedBinaryFiles: 0,
+            skippedUnreadableFiles: 0,
+            scopeSummary: '全工作区',
+            gitAvailable: true,
+            gitSince: '2026-03-04 ~ 2026-04-02'
+          }
+        },
+        projectStats: {
+          workspaceName: 'demo',
+          generatedAt: new Date(2026, 3, 2, 10, 0, 0).toLocaleString(),
+          totals: { files: 10, lines: 20, codeLines: 10, commentLines: 5, blankLines: 5, bytes: 200 },
+          languages: [],
+          directories: [],
+          directoryTree: [],
+          largestFiles: [],
+          files: [],
+          todoSummary: [],
+          todoHotspots: [],
+          todoLocations: [],
+          insights: {
+            averageLinesPerFile: 2,
+            averageCodeLinesPerFile: 1,
+            commentRatio: 0.5,
+            topLanguage: 'typescript',
+            topLanguageShare: 1,
+            topDirectory: 'src',
+            totalTodoCount: 0,
+            todoDensity: 0
+          },
+          analysisMeta: {
+            durationMs: 123,
+            matchedFiles: 10,
+            analyzedFiles: 10,
+            skippedBinaryFiles: 0,
+            skippedUnreadableFiles: 0,
+            scopeSummary: '全工作区'
+          },
+          git: {
+            available: true,
+            rangeLabel: '最近 12 周',
+            totalCommits: 2,
+            weeklyCommits: [],
+            topAuthors: []
+          }
+        }
+      },
+      {
+        compact: false,
+        title: 'Code Info',
+        subtitle: 'demo'
+      }
+    );
+
+    assert.ok(html.includes('<div class="topbar-right">'));
+    assert.ok(html.includes('class="menu menu-toolbar menu-range"'));
+    assert.ok(html.includes('切换范围'));
+    assert.ok(html.includes('最近 30 天'));
+  });
+
+  test('toolbar menu renders with dedicated toolbar anchor class', () => {
+    const html = getDashboardHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {},
+      {
+        compact: true,
+        title: 'Code Info',
+        subtitle: 'demo'
+      }
+    );
+
+    assert.ok(html.includes('class="menu menu-toolbar"'));
+  });
+
+  test('empty state exposes compare entry', () => {
+    const html = getEmptyStateHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      false
+    );
+
+    assert.ok(html.includes('data-command="openCompare"'));
+    assert.ok(html.includes('变更对比'));
+  });
+
+  test('dashboard exposes compare entry in compact and full layouts', () => {
+    const compactHtml = getDashboardHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {},
+      { compact: true, title: 'Code Info', subtitle: 'demo' }
+    );
+    const fullHtml = getDashboardHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {},
+      { compact: false, title: 'Code Info', subtitle: 'demo' }
+    );
+
+    assert.ok(compactHtml.includes('data-command="openCompare"'));
+    assert.ok(fullHtml.includes('data-command="openCompare"'));
   });
 });
