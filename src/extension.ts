@@ -4,7 +4,7 @@ import type { AnalysisDateRangePreset } from './analysis/dateRange';
 import { analyzeWorkspace } from './analysis/workspaceAnalyzer';
 import { exportStatsFile } from './export/exporter';
 import { showDashboardEmptyPanel, showEmptyIfOpen, showStatsPanel, updatePanelIfOpen, type DashboardPanelState } from './ui/panels';
-import { createInitialComparePanelState, showComparePanel, type ComparePanelControllerState } from './ui/comparePanel';
+import { createInitialComparePanelState, resetComparePanel, showComparePanel, type ComparePanelControllerState } from './ui/comparePanel';
 import { CodeInfoSidebarProvider } from './ui/sidebar';
 import { selectAnalysisDirectories } from './ui/scopePicker';
 import { CodeInfoStatusBarController } from './ui/statusBar';
@@ -119,6 +119,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       latestProjectStats = undefined;
       latestTodayStats = undefined;
+      resetComparePanel(comparePanelState);
       sidebarProvider.render(getDashboardData());
       statusBar.update(latestTodayStats);
       showEmptyIfOpen(dashboardPanelState);

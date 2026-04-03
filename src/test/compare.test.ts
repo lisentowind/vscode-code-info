@@ -19,7 +19,8 @@ import {
   applyCompareModeChange,
   buildCompareRequestFromPanelState,
   createInitialComparePanelState,
-  reduceComparePanelState
+  reduceComparePanelState,
+  resetComparePanel
 } from '../ui/comparePanel';
 import { getCompareHtml } from '../webview/compareTemplates';
 import type { CompareDiffRow, CompareFileSnapshot, CompareHotspot, CompareRequest } from '../types';
@@ -422,7 +423,17 @@ suite('Compare Primitives Test Suite', () => {
         baseRef: 'main',
         headRef: 'feature/test',
         status: 'error',
-        latestError: 'bad ref'
+        latestError: 'bad ref',
+        latestResult: {
+          compareSource: 'commits',
+          resolvedTargets: { source: 'commits', baseRef: 'base', headRef: 'head' },
+          summary: { changedFiles: 1, newFiles: 0, deletedFiles: 0, addedLines: 1, deletedLines: 0, netCodeLines: 1, todoDelta: 0 },
+          files: [],
+          languages: [],
+          directories: [],
+          hotspots: [],
+          analysisMeta: { durationMs: 10, totalFiles: 1, textComparableFiles: 1, skippedBinaryFiles: 0, skippedSubmoduleFiles: 0 }
+        }
       },
       'commit'
     );
@@ -432,6 +443,7 @@ suite('Compare Primitives Test Suite', () => {
     assert.strictEqual(state.headRef, '');
     assert.strictEqual(state.status, 'idle');
     assert.strictEqual(state.latestError, undefined);
+    assert.strictEqual(state.latestResult, undefined);
   });
 
   test('buildCompareRequestFromPanelState requires both refs for commit mode', () => {
@@ -487,6 +499,7 @@ suite('Compare Primitives Test Suite', () => {
     const error = reduceComparePanelState(success, { type: 'run:error', error: 'bad commit' });
     assert.strictEqual(error.status, 'error');
     assert.strictEqual(error.latestError, 'bad commit');
+    assert.strictEqual(error.latestResult, undefined);
   });
 
   test('getCompareHtml renders branch and commit controls plus compare summary', () => {
@@ -521,9 +534,38 @@ suite('Compare Primitives Test Suite', () => {
               after: { path: 'src/new.ts', language: 'typescript', codeLines: 6, todoTotal: 1 }
             })
           ],
-          languages: [],
-          directories: [],
-          hotspots: [],
+          languages: [
+            {
+              language: 'typescript',
+              beforeFiles: 1,
+              afterFiles: 2,
+              beforeCodeLines: 1,
+              afterCodeLines: 6,
+              deltaCodeLines: 5,
+              deltaTodo: 1
+            }
+          ],
+          directories: [
+            {
+              path: 'src',
+              beforeFiles: 1,
+              afterFiles: 2,
+              beforeCodeLines: 1,
+              afterCodeLines: 6,
+              deltaCodeLines: 5,
+              deltaTodo: 1
+            }
+          ],
+          hotspots: [
+            {
+              path: 'src/new.ts',
+              oldPath: 'src/legacy.ts',
+              status: 'renamed',
+              addedLines: 8,
+              deletedLines: 0,
+              changedLines: 8
+            }
+          ],
           analysisMeta: { durationMs: 10, totalFiles: 2, textComparableFiles: 2, skippedBinaryFiles: 0, skippedSubmoduleFiles: 0 }
         }
       }
@@ -540,6 +582,10 @@ suite('Compare Primitives Test Suite', () => {
     assert.ok(html.includes('status-badge status-deleted'));
     assert.ok(html.includes('status-badge status-renamed'));
     assert.ok(html.includes('打开 base'));
+    assert.ok(html.includes('打开旧路径'));
+    assert.ok(html.includes('语言变化'));
+    assert.ok(html.includes('目录变化'));
+    assert.ok(html.includes('热点文件'));
     assert.ok(html.includes('src/legacy.ts'));
     assert.ok(html.includes('src/new.ts'));
   });
@@ -556,6 +602,78 @@ suite('Compare Primitives Test Suite', () => {
 
     assert.ok(loadingHtml.includes('正在计算这次对比'));
     assert.ok(errorHtml.includes('invalid sha'));
+  });
+
+  test('getCompareHtml renders local branch dropdowns in branch mode', () => {
+    const state = {
+      ...createInitialComparePanelState(),
+      mode: 'branch' as const,
+      baseRef: 'main',
+      headRef: 'feature/demo',
+      branchOptions: ['main', 'master', 'feature/demo']
+    };
+
+    const html = getCompareHtml({ cspSource: 'vscode-webview:' } as vscode.Webview, state as never);
+
+    assert.ok(html.includes('id="branchBaseRef"'));
+    assert.ok(html.includes('id="branchHeadRef"'));
+    assert.ok(html.includes('<select'));
+    assert.ok(!html.includes('placeholder="base commit"'));
+    assert.ok(!html.includes('placeholder="head commit"'));
+  });
+
+  test('getCompareHtml keeps manual commit inputs in commit mode', () => {
+    const state = {
+      ...createInitialComparePanelState(),
+      mode: 'commit' as const,
+      baseRef: 'abc123',
+      headRef: 'def456',
+      branchOptions: ['main', 'master', 'feature/demo']
+    };
+
+    const html = getCompareHtml({ cspSource: 'vscode-webview:' } as vscode.Webview, state as never);
+
+    assert.ok(html.includes('placeholder="base commit"'));
+    assert.ok(html.includes('placeholder="head commit"'));
+    assert.ok(!html.includes('id="branchBaseRef"'));
+    assert.ok(!html.includes('id="branchHeadRef"'));
+  });
+
+  test('resetComparePanel clears stale result and rerenders open panel', () => {
+    const controller = {
+      extensionUri: undefined,
+      state: reduceComparePanelState(createInitialComparePanelState(), {
+        type: 'run:success',
+        result: {
+          compareSource: 'commits',
+          resolvedTargets: { source: 'commits', baseRef: 'base', headRef: 'head' },
+          summary: { changedFiles: 1, newFiles: 0, deletedFiles: 0, addedLines: 1, deletedLines: 0, netCodeLines: 1, todoDelta: 0 },
+          files: [],
+          languages: [],
+          directories: [],
+          hotspots: [],
+          analysisMeta: { durationMs: 10, totalFiles: 1, textComparableFiles: 1, skippedBinaryFiles: 0, skippedSubmoduleFiles: 0 }
+        }
+      }),
+      panel: {
+        title: '',
+        webview: {
+          cspSource: 'vscode-webview:',
+          html: ''
+        }
+      }
+    } as unknown as {
+      state: ReturnType<typeof createInitialComparePanelState>;
+      extensionUri?: vscode.Uri;
+      panel: vscode.WebviewPanel;
+    };
+
+    resetComparePanel(controller);
+
+    assert.strictEqual(controller.state.mode, 'branch');
+    assert.strictEqual(controller.state.status, 'idle');
+    assert.strictEqual(controller.state.latestResult, undefined);
+    assert.ok(controller.panel.webview.html.includes('还没有对比结果'));
   });
 });
 

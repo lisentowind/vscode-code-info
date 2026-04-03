@@ -37,8 +37,9 @@ export function getCompareHtml(
         <button class="compare-mode ${state.mode === 'commit' ? 'active' : ''}" data-command="compare:setMode" data-mode="commit">两个 Commit 对比</button>
       </div>
       <div class="compare-input-row">
-        <input id="baseRef" class="compare-input" placeholder="base commit" value="${escapeHtml(state.baseRef)}" />
-        <input id="headRef" class="compare-input" placeholder="head commit" value="${escapeHtml(state.headRef)}" />
+        ${state.mode === 'branch'
+          ? renderBranchSelectors(state.branchOptions, state.baseRef, state.headRef)
+          : renderCommitInputs(state.baseRef, state.headRef)}
         <button class="compare-run" data-command="compare:run">开始对比</button>
       </div>
       ${state.status === 'loading' ? '<div class="compare-banner">正在计算这次对比</div>' : ''}
@@ -47,6 +48,24 @@ export function getCompareHtml(
 
     ${result ? renderSummarySection(result.summary) : '<section class="compare-panel"><div class="compare-empty">还没有对比结果，先选择模式并运行一次。</div></section>'}
     ${result ? renderFilesSection(result.files) : ''}
+    ${result ? renderDeltaSection('语言变化', result.languages.map((item) => ({
+      label: item.language,
+      meta: `${item.beforeFiles} -> ${item.afterFiles} 文件`,
+      value: signedNumber(item.deltaCodeLines),
+      extra: `TODO ${signedNumber(item.deltaTodo)}`
+    })), '暂无语言变化。') : ''}
+    ${result ? renderDeltaSection('目录变化', result.directories.map((item) => ({
+      label: item.path,
+      meta: `${item.beforeFiles} -> ${item.afterFiles} 文件`,
+      value: signedNumber(item.deltaCodeLines),
+      extra: `TODO ${signedNumber(item.deltaTodo)}`
+    })), '暂无目录变化。') : ''}
+    ${result ? renderDeltaSection('热点文件', result.hotspots.map((item) => ({
+      label: item.oldPath ? `${item.oldPath} -> ${item.path}` : item.path,
+      meta: item.status,
+      value: `${item.changedLines}`,
+      extra: `+${item.addedLines} / -${item.deletedLines}`
+    })), '暂无热点文件。') : ''}
   </main>
   <script>
     const vscode = acquireVsCodeApi();
@@ -65,15 +84,42 @@ export function getCompareHtml(
       }
       vscode.postMessage({ command });
     });
-    document.getElementById('baseRef')?.addEventListener('input', (event) => {
-      vscode.postMessage({ command: 'compare:updateBaseRef', value: event.target.value });
-    });
-    document.getElementById('headRef')?.addEventListener('input', (event) => {
-      vscode.postMessage({ command: 'compare:updateHeadRef', value: event.target.value });
-    });
+    bindValueChange('baseRef', 'input', 'compare:updateBaseRef');
+    bindValueChange('headRef', 'input', 'compare:updateHeadRef');
+    bindValueChange('branchBaseRef', 'change', 'compare:updateBaseRef');
+    bindValueChange('branchHeadRef', 'change', 'compare:updateHeadRef');
+
+    function bindValueChange(id, eventName, command) {
+      document.getElementById(id)?.addEventListener(eventName, (event) => {
+        vscode.postMessage({ command, value: event.target.value });
+      });
+    }
   </script>
 </body>
 </html>`;
+}
+
+function renderBranchSelectors(branchOptions: string[], baseRef: string, headRef: string): string {
+  const options = branchOptions.length ? branchOptions : [baseRef, headRef].filter(Boolean);
+  return `
+    <select id="branchBaseRef" class="compare-input">
+      ${options.map((branch) => renderBranchOption(branch, branch === baseRef)).join('')}
+    </select>
+    <select id="branchHeadRef" class="compare-input">
+      ${options.map((branch) => renderBranchOption(branch, branch === headRef)).join('')}
+    </select>
+  `;
+}
+
+function renderCommitInputs(baseRef: string, headRef: string): string {
+  return `
+    <input id="baseRef" class="compare-input" placeholder="base commit" value="${escapeHtml(baseRef)}" />
+    <input id="headRef" class="compare-input" placeholder="head commit" value="${escapeHtml(headRef)}" />
+  `;
+}
+
+function renderBranchOption(branch: string, selected: boolean): string {
+  return `<option value="${escapeAttribute(branch)}"${selected ? ' selected' : ''}>${escapeHtml(branch)}</option>`;
 }
 
 function renderSummarySection(summary: NonNullable<ComparePanelState['latestResult']>['summary']): string {
@@ -101,12 +147,15 @@ function renderFilesSection(files: NonNullable<ComparePanelState['latestResult']
     <div class="compare-file-list">
       ${files
         .map((file) => {
+          const actions = [];
           const primaryTarget = resolvePrimaryOpenTarget(file);
-          const primaryAction = primaryTarget.kind !== 'none'
-            ? `<button class="compare-open" data-command="compare:openFile" data-open-target="${escapeAttribute(
-                JSON.stringify(primaryTarget)
-              )}">${file.status === 'deleted' ? '打开 base' : '打开文件'}</button>`
-            : '';
+          if (primaryTarget.kind !== 'none') {
+            actions.push(renderOpenButton(primaryTarget, file.status === 'deleted' ? '打开 base' : '打开文件'));
+          }
+          const oldPathTarget = resolveOldPathOpenTarget(file);
+          if (oldPathTarget.kind !== 'none') {
+            actions.push(renderOpenButton(oldPathTarget, '打开旧路径'));
+          }
           const oldPath = file.oldPath
             ? `<div class="compare-file-old">${escapeHtml(file.oldPath)}</div>`
             : '';
@@ -116,11 +165,36 @@ function renderFilesSection(files: NonNullable<ComparePanelState['latestResult']
               ${oldPath}
               <div class="compare-file-path">${escapeHtml(file.path)}</div>
             </div>
-            ${primaryAction}
+            <div class="compare-file-actions">${actions.join('')}</div>
           </div>`;
         })
         .join('')}
     </div>
+  </section>`;
+}
+
+function renderDeltaSection(
+  title: string,
+  rows: Array<{ label: string; meta: string; value: string; extra: string }>,
+  emptyText: string
+): string {
+  return `<section class="compare-panel">
+    <div class="compare-section-title">${escapeHtml(title)}</div>
+    ${rows.length
+      ? `<div class="compare-delta-list">
+          ${rows
+            .map(
+              (row) => `<div class="compare-delta-row">
+                <div class="compare-delta-body">
+                  <div class="compare-delta-label">${escapeHtml(row.label)}</div>
+                  <div class="compare-delta-meta">${escapeHtml(row.meta)} · ${escapeHtml(row.extra)}</div>
+                </div>
+                <div class="compare-delta-value">${escapeHtml(row.value)}</div>
+              </div>`
+            )
+            .join('')}
+        </div>`
+      : `<div class="compare-empty">${escapeHtml(emptyText)}</div>`}
   </section>`;
 }
 
@@ -148,6 +222,33 @@ function resolvePrimaryOpenTarget(file: NonNullable<ComparePanelState['latestRes
   }
 
   return { kind: 'none' };
+}
+
+function resolveOldPathOpenTarget(file: NonNullable<ComparePanelState['latestResult']>['files'][number]): CompareOpenTarget {
+  if (file.openTargets.oldPath && file.openTargets.oldPath.kind !== 'none') {
+    return file.openTargets.oldPath;
+  }
+
+  if (file.oldPath && file.before) {
+    return {
+      kind: 'snapshot',
+      title: `${file.before.path} (${file.before.ref.slice(0, 8)})`,
+      content: file.before.content,
+      language: file.before.file.language
+    };
+  }
+
+  return { kind: 'none' };
+}
+
+function renderOpenButton(target: CompareOpenTarget, label: string): string {
+  return `<button class="compare-open" data-command="compare:openFile" data-open-target="${escapeAttribute(
+    JSON.stringify(target)
+  )}">${escapeHtml(label)}</button>`;
+}
+
+function signedNumber(value: number): string {
+  return value > 0 ? `+${value}` : `${value}`;
 }
 
 function escapeHtml(value: string): string {

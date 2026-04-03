@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { analyzeCompare } from '../analysis/compareAnalyzer';
+import { getCurrentBranchName, listLocalBranches, resolveDefaultCompareBase } from '../git/compare';
 import type { CompareOpenTarget, CompareRequest, CompareStats } from '../types';
 import { openCompareTarget } from './resourceNavigator';
 import { getCompareHtml } from '../webview/compareTemplates';
@@ -10,6 +11,7 @@ export type ComparePanelState = {
   mode: CompareRequest['mode'];
   baseRef: string;
   headRef: string;
+  branchOptions: string[];
   status: ComparePanelRunStatus;
   latestResult?: CompareStats;
   latestError?: string;
@@ -40,6 +42,7 @@ export function createInitialComparePanelState(): ComparePanelState {
     mode: 'branch',
     baseRef: '',
     headRef: '',
+    branchOptions: [],
     status: 'idle'
   };
 }
@@ -53,7 +56,9 @@ export function applyCompareModeChange(
     mode,
     baseRef: '',
     headRef: '',
+    branchOptions: [],
     status: 'idle',
+    latestResult: undefined,
     latestError: undefined
   };
 }
@@ -100,6 +105,7 @@ export function reduceComparePanelState(state: ComparePanelState, action: Compar
       return {
         ...state,
         status: 'error',
+        latestResult: undefined,
         latestError: action.error
       };
   }
@@ -113,9 +119,75 @@ export function showComparePanel(
   renderComparePanel(panel, controller.state, controller.extensionUri);
   panel.reveal(vscode.ViewColumn.One, false);
 
-  if (controller.state.status === 'idle' && controller.state.mode === 'branch') {
-    void runCompare(controller);
+  void ensureBranchModeReady(controller);
+}
+
+export function resetComparePanel(controller: ComparePanelControllerState): void {
+  controller.state = createInitialComparePanelState();
+  if (controller.panel) {
+    renderComparePanel(controller.panel, controller.state, controller.extensionUri);
   }
+}
+
+async function ensureBranchModeReady(controller: ComparePanelControllerState): Promise<void> {
+  if (controller.state.mode !== 'branch') {
+    return;
+  }
+
+  if (!controller.state.branchOptions.length) {
+    try {
+      controller.state = await hydrateBranchState(controller.state);
+      if (controller.panel) {
+        renderComparePanel(controller.panel, controller.state, controller.extensionUri);
+      }
+    } catch (error) {
+      controller.state = reduceComparePanelState(controller.state, {
+        type: 'run:error',
+        error: error instanceof Error ? error.message : String(error)
+      });
+      if (controller.panel) {
+        renderComparePanel(controller.panel, controller.state, controller.extensionUri);
+      }
+      return;
+    }
+  }
+
+  if (controller.state.status === 'idle') {
+    await runCompare(controller);
+  }
+}
+
+async function hydrateBranchState(state: ComparePanelState): Promise<ComparePanelState> {
+  const rootPath = getWorkspaceRootPath();
+  const [branchOptions, currentBranch] = await Promise.all([
+    listLocalBranches(rootPath),
+    getCurrentBranchName(rootPath)
+  ]);
+  const baseRef = state.baseRef || (await resolveFallbackBaseRef(rootPath, branchOptions, currentBranch));
+
+  return {
+    ...state,
+    branchOptions,
+    baseRef,
+    headRef: state.headRef || currentBranch,
+    latestError: undefined
+  };
+}
+
+async function resolveFallbackBaseRef(rootPath: string, branchOptions: string[], currentBranch: string): Promise<string> {
+  try {
+    return await resolveDefaultCompareBase(rootPath);
+  } catch {
+    return branchOptions.find((branch) => branch !== currentBranch) ?? currentBranch;
+  }
+}
+
+function getWorkspaceRootPath(): string {
+  const rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!rootPath) {
+    throw new Error('No workspace folder found.');
+  }
+  return rootPath;
 }
 
 function ensureComparePanel(
@@ -158,7 +230,7 @@ async function handleComparePanelMessage(
         renderComparePanel(controller.panel, controller.state, controller.extensionUri);
       }
       if (controller.state.mode === 'branch') {
-        await runCompare(controller);
+        await ensureBranchModeReady(controller);
       }
       return;
     case 'compare:updateBaseRef':

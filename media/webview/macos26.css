@@ -857,6 +857,12 @@ details.tree-node > summary::-webkit-details-marker { display: none; }
   background: color-mix(in srgb, var(--bg) 84%, transparent);
 }
 .compare-file-body { min-width: 0; }
+.compare-file-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .compare-file-old {
   font-size: 12px;
   color: var(--muted);
@@ -884,9 +890,39 @@ details.tree-node > summary::-webkit-details-marker { display: none; }
 .status-deleted { background: color-mix(in srgb, #8a1d35 22%, transparent); }
 .status-renamed { background: color-mix(in srgb, #1d5a8a 22%, transparent); }
 .status-binary, .status-submodule { background: color-mix(in srgb, var(--muted) 20%, transparent); }
+.compare-delta-list { display: grid; gap: 10px; }
+.compare-delta-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 75%, transparent);
+  border-radius: var(--radius-l);
+  padding: 12px;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+}
+.compare-delta-body { min-width: 0; }
+.compare-delta-label {
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compare-delta-meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.compare-delta-value {
+  font-size: 18px;
+  font-weight: 650;
+  white-space: nowrap;
+}
 
 @media (max-width: 760px) {
   .compare-file-row { grid-template-columns: 1fr; }
+  .compare-file-actions { justify-content: flex-start; }
+  .compare-delta-row { grid-template-columns: 1fr; }
 }
 .tree-more { padding-left: 4px; }
 

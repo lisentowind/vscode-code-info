@@ -25,7 +25,7 @@ export async function resolveCompareTargets(rootPath: string, request: CompareRe
   }
 
   const baseRef = request.baseRef?.trim() || (await resolveDefaultCompareBase(rootPath));
-  const headRef = request.headRef?.trim() || (await runGit(['symbolic-ref', '--short', 'HEAD'], rootPath)).trim();
+  const headRef = request.headRef?.trim() || (await getCurrentBranchName(rootPath));
 
   await Promise.all([assertCommitExists(rootPath, baseRef), assertCommitExists(rootPath, headRef)]);
 
@@ -34,6 +34,19 @@ export async function resolveCompareTargets(rootPath: string, request: CompareRe
     baseRef,
     headRef
   };
+}
+
+export async function listLocalBranches(rootPath: string): Promise<string[]> {
+  const output = await runGit(['for-each-ref', '--format=%(refname:short)', 'refs/heads'], rootPath);
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+export async function getCurrentBranchName(rootPath: string): Promise<string> {
+  return (await runGit(['symbolic-ref', '--short', 'HEAD'], rootPath)).trim();
 }
 
 export function parseCompareRawOutput(output: string): CompareRawDiffRow[] {
