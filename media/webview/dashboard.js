@@ -506,18 +506,24 @@ const metaHtml = metaParts.join('');
 
 const chipsHtml = heroBadges.slice(0, presentation.compact ? 2 : 4).join('');
 const rangeMenuLabel = todayStats ? ('切换范围 · ' + rangeLabel) : '切换范围';
+const summaryPills = [];
+if (todayStats) summaryPills.push('<span class="summary-pill">变更 ' + numberFormat(todayStats.totals.touchedFiles) + '</span>');
+if (todayStats) summaryPills.push('<span class="summary-pill">新增 ' + numberFormat(todayStats.totals.newFiles) + '</span>');
+if (todayStats && todayStats.totals.deletedFiles) summaryPills.push('<span class="summary-pill">删除 ' + numberFormat(todayStats.totals.deletedFiles) + '</span>');
+if (projectStats) summaryPills.push('<span class="summary-pill">项目 ' + numberFormat(projectStats.totals.files) + '</span>');
+const summaryPillsHtml = summaryPills.join('');
 
 const quickActionsHtml = presentation.compact
   ? '<button class="action" data-command="' + refreshRangeCommand + '">' + icon('refresh') + escapeHtml(refreshRangeLabel) + '</button>' +
     '<button class="action secondary" data-command="openCompare">' + icon('git') + '变更对比</button>' +
     '<button class="action secondary" data-command="openPanel">' + icon('detail') + '详情分析</button>'
-  : '<button class="action" data-command="' + refreshRangeCommand + '">' + icon('refresh') + escapeHtml(refreshRangeLabel) + '</button>' +
-    '<button class="action" data-command="showStats">' + icon('project') + '开始项目分析</button>' +
-    '<button class="action secondary" data-command="openCompare">' + icon('git') + '变更对比</button>';
+  : '<button class="action action-compact secondary" data-command="' + refreshRangeCommand + '">' + icon('refresh') + '刷新</button>' +
+    '<button class="action action-compact" data-command="showStats">' + icon('project') + '分析</button>' +
+    '<button class="action action-compact secondary" data-command="openCompare">' + icon('git') + '对比</button>';
 
 const rangeMenuHtml =
   '<details class="menu menu-toolbar menu-range' + compactMenuClass + '" id="__codeInfoRangeMenu">' +
-    '<summary class="action secondary" aria-label="切换统计范围">' + icon('today') + escapeHtml(rangeMenuLabel) + '</summary>' +
+    '<summary class="action ' + (presentation.compact ? 'secondary' : 'action-compact secondary') + '" aria-label="切换统计范围">' + icon('today') + (presentation.compact ? escapeHtml(rangeMenuLabel) : '范围') + '</summary>' +
     '<div class="menu-popover" role="menu">' +
       '<div class="menu-group">' +
         '<div class="menu-title">范围</div>' +
@@ -530,7 +536,7 @@ const rangeMenuHtml =
 
 const menuHtml =
   '<details class="menu menu-toolbar' + compactMenuClass + '" id="__codeInfoMenu">' +
-    '<summary class="action secondary" aria-label="打开操作菜单">' + icon('menu') + '更多操作</summary>' +
+    '<summary class="action ' + (presentation.compact ? 'secondary' : 'action-compact secondary') + '" aria-label="打开操作菜单">' + icon('menu') + '更多</summary>' +
     '<div class="menu-popover" role="menu">' +
       '<div class="menu-group">' +
         '<div class="menu-title">分析</div>' +
@@ -622,23 +628,42 @@ const sidebarHtml = !presentation.compact
     '</aside>'
   : '';
 
-const topbarHtml = '' +
-  '<header class="topbar">' +
-    '<div class="topbar-inner">' +
-      '<div class="brand">' +
-        icon(presentation.compact ? 'today' : 'dashboard') +
-        '<div class="brand-text">' +
-          '<div class="brand-title">' + escapeHtml(presentation.title) + '</div>' +
-          '<div class="brand-sub">' + escapeHtml(presentation.subtitle) + '</div>' +
-          '<div class="brand-meta">' + metaHtml + '</div>' +
+const topbarHtml = presentation.compact
+  ? '' +
+    '<header class="topbar">' +
+      '<div class="topbar-inner">' +
+        '<div class="brand">' +
+          icon('today') +
+          '<div class="brand-text">' +
+            '<div class="brand-title">' + escapeHtml(presentation.title) + '</div>' +
+            '<div class="brand-sub">' + escapeHtml(presentation.subtitle) + '</div>' +
+            '<div class="brand-meta">' + metaHtml + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="topbar-right">' +
+          '<div class="chips">' + chipsHtml + '</div>' +
+          '<div class="toolbar">' + rangeMenuHtml + quickActionsHtml + menuHtml + '</div>' +
         '</div>' +
       '</div>' +
-      ('<div class="topbar-right">' +
-        '<div class="chips">' + chipsHtml + '</div>' +
-        '<div class="toolbar">' + rangeMenuHtml + quickActionsHtml + menuHtml + '</div>' +
-      '</div>') +
-    '</div>' +
-  '</header>';
+    '</header>'
+  : '' +
+    '<header class="topbar topbar-panel">' +
+      '<div class="topbar-inner topbar-inner-panel">' +
+        '<div class="topbar-main topbar-main-row">' +
+          '<div class="brand brand-panel">' +
+            icon('dashboard') +
+            '<div class="brand-text">' +
+              '<div class="brand-title">' + escapeHtml(presentation.title) + '</div>' +
+              '<div class="brand-meta">' + metaHtml + '</div>' +
+            '</div>' +
+          '</div>' +
+          (summaryPillsHtml ? '<div class="topbar-summary">' + summaryPillsHtml + '</div>' : '') +
+          '<div class="topbar-actions topbar-actions-row">' +
+            '<div class="toolbar toolbar-panel toolbar-panel-row">' + rangeMenuHtml + quickActionsHtml + menuHtml + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</header>';
 
 let html = '' +
   (presentation.compact
@@ -647,7 +672,7 @@ let html = '' +
 
 if (todayStats) {
   html += '' +
-    '<section class="panel" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>' + escapeHtml(rangeHeading) + '统计分析</h2></div><div class="section-note">新增/修改基于文件时间戳；删除文件与增删行（如有）基于当前时间范围内的 Git 提交。</div></section>' +
+    '<section class="section-intro" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>' + escapeHtml(rangeHeading) + '统计分析</h2></div><div class="section-note section-note-tight">新增/修改基于文件时间戳；删除文件与增删行基于当前时间范围内的 Git 提交。</div></section>' +
     '<section class="cards">' +
       metricCard(rangeHeading + '变更文件', numberFormat(todayStats.totals.touchedFiles), '当前范围内被修改或新增的文本文件', 'files') +
       metricCard(rangeHeading + '新增文件', numberFormat(todayStats.totals.newFiles), '通过文件创建时间判断的新文件', 'newFile') +
@@ -673,12 +698,12 @@ if (todayStats) {
     (todayStats.totals.todoCount > 0 ? ('<section class="panel"><div class="section-title">' + icon('todo') + '<h2>' + escapeHtml(rangeHeading) + '待办清单</h2></div><div class="section-note">展示部分 TODO / FIXME / HACK 位置，点击可跳转到对应行。</div>' + renderTodoLocations(todayStats.todoLocations, '当前范围变更文件中未发现待办标记。') + '</section>') : '') +
     '<section class="panel"><div class="section-title">' + icon('deletedFile') + '<h2>' + escapeHtml(rangeHeading) + '删除文件</h2></div><div class="section-note">' + (todayStats.analysisMeta.gitAvailable ? '基于当前时间范围内的 Git 提交，仅展示文件路径。' : '当前工作区没有可用的 Git 数据，无法统计删除文件。') + '</div>' + renderDeletedFiles(todayStats.deletedFiles, '当前范围内还没有检测到删除文件。') + '</section>';
 } else {
-  html += '<section class="panel" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>范围统计分析</h2></div><div class="empty-note">当前还没有范围统计数据。切到插件时会自动刷新，也可以手动点击“刷新今天”。</div></section>';
+  html += '<section class="section-intro" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>范围统计分析</h2></div><div class="section-note section-note-tight">当前还没有范围统计数据。切到插件时会自动刷新，也可以手动点击“刷新今天”。</div></section>';
 }
 
 if (!presentation.compact && projectStats) {
   html += '' +
-    '<section class="panel" id="ci-section-project"><div class="section-title">' + icon('project') + '<h2>项目分析模块</h2></div><div class="section-note">手动触发的全量项目分析，适合看整体代码规模、目录结构和 Git 活动。</div></section>' +
+    '<section class="section-intro section-intro-project" id="ci-section-project"><div class="section-title">' + icon('project') + '<h2>项目分析模块</h2></div><div class="section-note section-note-tight">手动触发的全量项目分析，适合看整体代码规模、目录结构和 Git 活动。</div></section>' +
     '<section class="cards">' +
       metricCard('总文件数', numberFormat(projectStats.totals.files), '参与统计的文本文件', 'files') +
       metricCard('代码行', numberFormat(projectStats.totals.codeLines), '有效代码规模', 'lines') +
@@ -705,15 +730,12 @@ if (!presentation.compact && projectStats) {
     '<section class="panel"><div class="section-title">' + icon('files') + '<h2>最大文件排行</h2></div><div class="section-note">点击文件名可直接打开源码。</div><div class="table-wrap"><table><thead><tr><th>文件</th><th>语言</th><th>总行数</th><th>代码行</th><th>待办数</th></tr></thead><tbody>' + renderLargestFiles(projectStats.largestFiles) + '</tbody></table></div></section>';
 } else if (!presentation.compact) {
   html += '' +
-    '<section class="panel" id="ci-section-project">' +
+    '<section class="section-intro section-intro-project" id="ci-section-project">' +
       '<div class="section-title">' + icon('project') + '<h2>项目分析模块</h2></div>' +
-      '<div class="empty-note">' +
-        '<strong>还没有项目分析结果</strong><br>' +
-        '点击“开始项目分析”后，会执行全量扫描并展示完整的项目级数据。' +
-        '<div class="inline-actions">' +
-          '<button class="action" data-command="showStats">' + icon('project') + '开始项目分析</button>' +
-          '<button class="action secondary" data-command="selectScope">' + icon('scope') + '选择目录</button>' +
-        '</div>' +
+      '<div class="section-note section-note-tight">还没有项目分析结果。点击“开始项目分析”后，会执行全量扫描并展示完整的项目级数据。</div>' +
+      '<div class="inline-actions">' +
+        '<button class="action action-slim" data-command="showStats">' + icon('project') + '开始项目分析</button>' +
+        '<button class="action action-slim secondary" data-command="selectScope">' + icon('scope') + '选择目录</button>' +
       '</div>' +
     '</section>';
 }
@@ -796,7 +818,7 @@ function initAnimations() {
   }
   animateWhenVisible('.card', { autoAlpha: 1, y: 0, duration: 0.62, stagger: 0.04 });
   animateWhenVisible('.panel', { autoAlpha: 1, y: 0, duration: 0.68, stagger: 0.05 });
-  animateWhenVisible('.fab-button', { autoAlpha: 1, y: 0, scale: 1, duration: 0.56, stagger: 0.05 });
+  animateWhenVisible('.fab-button', { autoAlpha: 1, y: 0, scale: 1, duration: 0.42, stagger: 0.04 });
   animateWhenVisible('.bar-row, .git-block, .author-item, .tree-node, .tree-file-row, tbody tr', {
     autoAlpha: 1,
     y: 0,
@@ -831,13 +853,6 @@ function initAnimations() {
       delay: 0.26 + index * 0.06,
       ease: 'power2.out'
     });
-  });
-  gsap.to('.floatbar', {
-    y: -8,
-    duration: 2.8,
-    ease: 'sine.inOut',
-    repeat: -1,
-    yoyo: true
   });
   vscode.setState({ ...motionState, dashboardIntroPlayed: true });
 }
