@@ -16,6 +16,7 @@ import { analyzeCompareSnapshots } from '../analysis/compareSnapshots';
 import { buildCompareSummaries } from '../analysis/compareSummaries';
 import { analyzeCompare } from '../analysis/compareAnalyzer';
 import {
+  applyComparePanelIcon,
   applyCompareModeChange,
   buildCompareRequestFromPanelState,
   createInitialComparePanelState,
@@ -674,6 +675,18 @@ suite('Compare Primitives Test Suite', () => {
     assert.strictEqual(controller.state.status, 'idle');
     assert.strictEqual(controller.state.latestResult, undefined);
     assert.ok(controller.panel.webview.html.includes('还没有对比结果'));
+  });
+
+  test('applyComparePanelIcon wires extension icon for compare panel', () => {
+    const panel = {} as vscode.WebviewPanel;
+    const extensionUri = vscode.Uri.file('/tmp/code-info-extension');
+
+    applyComparePanelIcon(panel, extensionUri);
+
+    assert.deepStrictEqual(panel.iconPath, {
+      light: vscode.Uri.joinPath(extensionUri, 'resources', 'icon.png'),
+      dark: vscode.Uri.joinPath(extensionUri, 'resources', 'icon.png')
+    });
   });
 });
 

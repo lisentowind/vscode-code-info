@@ -2,11 +2,13 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { collectAnalyzedFiles } from '../analysis/shared';
 import { createPresetDateRange, formatDateRangeLabel } from '../analysis/dateRange';
+import { decideRangeRefresh } from '../app/refreshPolicy';
 import { countTextMetrics } from '../analysis/lineMetrics';
 import { buildDirectorySummaries, buildDirectoryTree } from '../analysis/summaries';
 import { sortTouchedFiles } from '../analysis/todayAnalyzer';
 import { buildWeeklyBuckets, getWeekBucketKey, parseDeletedFilesOutput, parseNumstatOutput } from '../git/common';
 import { createDashboardPanelOptions, getDashboardPanelTitle } from '../ui/panels';
+import { buildDashboardShellHtml, buildDashboardWebviewResources } from '../webview/dashboardShell';
 import { getDashboardHtml, getEmptyStateHtml } from '../webview/templates';
 import type { TextFileAnalysisResult } from '../analysis/fileAnalyzer';
 import type { FileStat } from '../types';
@@ -322,7 +324,107 @@ suite('Extension Test Suite', () => {
     assert.deepStrictEqual(files.map((file) => file.path), ['b.ts', 'a.ts']);
   });
 
-  test('range dashboard uses clearer wording for stats notes', () => {
+  test('decideRangeRefresh reuses fresh cached stats for the same preset', () => {
+    const generatedAt = new Date('2026-04-07T05:00:00.000Z').toISOString();
+
+    const decision = decideRangeRefresh({
+      requestedPreset: 'today',
+      latestPreset: 'today',
+      latestStats: { generatedAt, rangePreset: 'today' },
+      maxAgeMs: 60_000,
+      now: new Date('2026-04-07T05:00:30.000Z').getTime()
+    });
+
+    assert.deepStrictEqual(decision, {
+      preset: 'today',
+      useCached: true,
+      waitForInFlight: false,
+      rerunAfterInFlight: false
+    });
+  });
+
+  test('decideRangeRefresh waits for an in-flight refresh of the same preset without scheduling another run', () => {
+    const decision = decideRangeRefresh({
+      requestedPreset: 'last7Days',
+      latestPreset: 'today',
+      inFlightPreset: 'last7Days',
+      maxAgeMs: 60_000,
+      now: new Date('2026-04-07T05:00:00.000Z').getTime()
+    });
+
+    assert.deepStrictEqual(decision, {
+      preset: 'last7Days',
+      useCached: false,
+      waitForInFlight: true,
+      rerunAfterInFlight: false
+    });
+  });
+
+  test('decideRangeRefresh retries after an in-flight refresh when the requested preset changed', () => {
+    const decision = decideRangeRefresh({
+      requestedPreset: 'last30Days',
+      latestPreset: 'today',
+      inFlightPreset: 'today',
+      maxAgeMs: 60_000,
+      now: new Date('2026-04-07T05:00:00.000Z').getTime()
+    });
+
+    assert.deepStrictEqual(decision, {
+      preset: 'last30Days',
+      useCached: false,
+      waitForInFlight: true,
+      rerunAfterInFlight: true
+    });
+  });
+
+  test('buildDashboardWebviewResources returns CSS, chart, and dashboard script URIs when extension uri exists', () => {
+    const resources = buildDashboardWebviewResources(
+      {
+        asWebviewUri: (uri: vscode.Uri) => uri
+      } as unknown as vscode.Webview,
+      vscode.Uri.file('/tmp/code-info-extension')
+    );
+
+    assert.ok(resources.cssUri?.endsWith('/media/webview/macos26.css'));
+    assert.ok(resources.echartsUri?.endsWith('/media/vendor/echarts.min.js'));
+    assert.ok(resources.scriptUri?.endsWith('/media/webview/dashboard.js'));
+  });
+
+  test('buildDashboardWebviewResources omits URIs when extension uri is unavailable', () => {
+    const resources = buildDashboardWebviewResources(
+      {
+        asWebviewUri: (uri: vscode.Uri) => uri
+      } as unknown as vscode.Webview
+    );
+
+    assert.deepStrictEqual(resources, {
+      cssUri: undefined,
+      echartsUri: undefined,
+      scriptUri: undefined
+    });
+  });
+
+  test('buildDashboardShellHtml links the external dashboard runtime and payload', () => {
+    const html = buildDashboardShellHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {
+        compact: true,
+        payloadJson: '{"ok":true}',
+        bodyHtml: '<section>demo</section>',
+        cssUri: 'vscode-webview://style.css',
+        echartsUri: 'vscode-webview://echarts.js',
+        scriptUri: 'vscode-webview://dashboard.js'
+      }
+    );
+
+    assert.ok(html.includes('<script nonce='));
+    assert.ok(html.includes('id="__codeInfoPayload" type="application/json">{"ok":true}</script>'));
+    assert.ok(html.includes('<div id="app" class="shell"><section>demo</section></div>'));
+    assert.ok(html.includes('src="vscode-webview://dashboard.js"'));
+    assert.ok(!html.includes('const vscode = acquireVsCodeApi();'));
+  });
+
+  test('dashboard shell serializes today stats into payload', () => {
     const html = getDashboardHtml(
       { cspSource: 'vscode-webview:' } as vscode.Webview,
       {
@@ -372,17 +474,16 @@ suite('Extension Test Suite', () => {
         compact: false,
         title: 'Code Info',
         subtitle: 'demo'
-      }
+      },
+      { scriptUri: 'vscode-webview://dashboard.js' }
     );
 
-    assert.ok(html.includes('统计说明'));
-    assert.ok(html.includes('纳入统计的文件'));
-    assert.ok(html.includes('Git 统计起点'));
-    assert.ok(html.includes('分析耗时'));
-    assert.ok(!html.includes('今天元信息'));
+    assert.ok(html.includes('"rangeLabel":"今天"'));
+    assert.ok(html.includes('"scopeSummary":"全工作区"'));
+    assert.ok(html.includes('src="vscode-webview://dashboard.js"'));
   });
 
-  test('non-compact dashboard renders visible range switch entry in topbar', () => {
+  test('dashboard shell preserves project and range payload for runtime rendering', () => {
     const html = getDashboardHtml(
       { cspSource: 'vscode-webview:' } as vscode.Webview,
       {
@@ -470,30 +571,16 @@ suite('Extension Test Suite', () => {
         compact: false,
         title: 'Code Info',
         subtitle: 'demo'
-      }
+      },
+      { scriptUri: 'vscode-webview://dashboard.js' }
     );
 
-    assert.ok(html.includes('<div class="topbar-right">'));
-    assert.ok(html.includes('class="menu menu-toolbar menu-range"'));
-    assert.ok(html.includes('切换范围'));
-    assert.ok(html.includes('最近 30 天'));
+    assert.ok(html.includes('"rangeLabel":"最近 30 天"'));
+    assert.ok(html.includes('"workspaceName":"demo"'));
+    assert.ok(html.includes('<div id="app" class="shell"></div>'));
   });
 
-  test('toolbar menu renders with dedicated toolbar anchor class', () => {
-    const html = getDashboardHtml(
-      { cspSource: 'vscode-webview:' } as vscode.Webview,
-      {},
-      {
-        compact: false,
-        title: 'Code Info',
-        subtitle: 'demo'
-      }
-    );
-
-    assert.ok(html.includes('class="menu menu-toolbar"'));
-  });
-
-  test('compact dashboard uses dedicated compact menu classes for sidebar popovers', () => {
+  test('dashboard shell uses compact body mode when requested', () => {
     const html = getDashboardHtml(
       { cspSource: 'vscode-webview:' } as vscode.Webview,
       {},
@@ -501,11 +588,11 @@ suite('Extension Test Suite', () => {
         compact: true,
         title: 'Code Info',
         subtitle: 'demo'
-      }
+      },
+      { scriptUri: 'vscode-webview://dashboard.js' }
     );
 
-    assert.ok(html.includes('class="menu menu-toolbar menu-range menu-compact"'));
-    assert.ok(html.includes('class="menu menu-toolbar menu-compact"'));
+    assert.ok(html.includes('<body class="compact">'));
   });
 
   test('empty state exposes compare entry', () => {
@@ -518,19 +605,80 @@ suite('Extension Test Suite', () => {
     assert.ok(html.includes('变更对比'));
   });
 
-  test('dashboard exposes compare entry in compact and full layouts', () => {
+  test('dashboard shell injects runtime entry in compact and full layouts', () => {
     const compactHtml = getDashboardHtml(
       { cspSource: 'vscode-webview:' } as vscode.Webview,
       {},
-      { compact: true, title: 'Code Info', subtitle: 'demo' }
+      { compact: true, title: 'Code Info', subtitle: 'demo' },
+      { scriptUri: 'vscode-webview://dashboard.js' }
     );
     const fullHtml = getDashboardHtml(
       { cspSource: 'vscode-webview:' } as vscode.Webview,
       {},
-      { compact: false, title: 'Code Info', subtitle: 'demo' }
+      { compact: false, title: 'Code Info', subtitle: 'demo' },
+      { scriptUri: 'vscode-webview://dashboard.js' }
     );
 
-    assert.ok(compactHtml.includes('data-command="openCompare"'));
-    assert.ok(fullHtml.includes('data-command="openCompare"'));
+    assert.ok(compactHtml.includes('src="vscode-webview://dashboard.js"'));
+    assert.ok(fullHtml.includes('src="vscode-webview://dashboard.js"'));
+  });
+
+  test('dashboard shell falls back to static summary when runtime script is unavailable', () => {
+    const html = getDashboardHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {
+        todayStats: {
+          workspaceName: 'demo',
+          generatedAt: new Date(2026, 3, 2, 10, 0, 0).toLocaleString(),
+          rangePreset: 'last7Days',
+          rangeLabel: '最近 7 天',
+          totals: {
+            touchedFiles: 8,
+            newFiles: 2,
+            deletedFiles: 1,
+            lines: 120,
+            codeLines: 90,
+            commentLines: 20,
+            blankLines: 10,
+            bytes: 2000,
+            todoCount: 3,
+            addedLines: 40,
+            deletedLines: 10,
+            changedLines: 50
+          },
+          languages: [],
+          touchedFiles: [],
+          newFiles: [],
+          deletedFiles: [],
+          todoLocations: [],
+          insights: {
+            topLanguage: 'typescript',
+            topLanguageShare: 0.8,
+            topPath: 'src/a.ts',
+            todoTouchedCount: 2
+          },
+          analysisMeta: {
+            durationMs: 123,
+            matchedFiles: 10,
+            analyzedFiles: 8,
+            skippedBinaryFiles: 0,
+            skippedUnreadableFiles: 0,
+            scopeSummary: '全工作区',
+            gitAvailable: true,
+            gitSince: '2026-03-27 ~ 2026-04-02'
+          }
+        }
+      },
+      {
+        compact: false,
+        title: 'Code Info',
+        subtitle: 'demo'
+      }
+    );
+
+    assert.ok(html.includes('看板脚本未成功加载'));
+    assert.ok(html.includes('最近 7 天'));
+    assert.ok(html.includes('8'));
+    assert.ok(!html.includes('src="vscode-webview://dashboard.js"'));
   });
 });

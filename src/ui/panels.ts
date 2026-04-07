@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { DashboardData, PresentationMode } from '../types';
 import { getDashboardHtml, getEmptyStateHtml } from '../webview/templates';
+import { buildDashboardWebviewResources } from '../webview/dashboardShell';
 import type { WebviewCommandMessage } from './webviewCommands';
 
 export type DashboardPanelState = {
@@ -51,7 +52,7 @@ export function showDashboardEmptyPanel(
   applyPanelIcon(panel, extensionUri);
   panel.webview.html = getEmptyStateHtml(panel.webview, false, {
     showOpenPanel: false,
-    cssUri: getCssUri(panel.webview, extensionUri)
+    cssUri: buildDashboardWebviewResources(panel.webview, extensionUri).cssUri
   });
   panel.reveal(vscode.ViewColumn.One, false);
 }
@@ -62,7 +63,7 @@ export function showEmptyIfOpen(state: DashboardPanelState): void {
   }
   state.panel.webview.html = getEmptyStateHtml(state.panel.webview, false, {
     showOpenPanel: false,
-    cssUri: getCssUri(state.panel.webview, state.extensionUri)
+    cssUri: buildDashboardWebviewResources(state.panel.webview, state.extensionUri).cssUri
   });
 }
 
@@ -74,10 +75,11 @@ function renderPanel(panel: vscode.WebviewPanel, data: DashboardData, extensionU
     subtitle: '包含今日统计分析、项目分析、模块目录树和近期 Git 活动。'
   };
 
-  const echartsUri = getEchartsUri(panel.webview, extensionUri);
+  const resources = buildDashboardWebviewResources(panel.webview, extensionUri);
   panel.webview.html = getDashboardHtml(panel.webview, data, presentation, {
-    echartsUri,
-    cssUri: getCssUri(panel.webview, extensionUri)
+    echartsUri: resources.echartsUri,
+    cssUri: resources.cssUri,
+    scriptUri: resources.scriptUri
   });
 }
 
@@ -136,18 +138,4 @@ function applyPanelIcon(panel: vscode.WebviewPanel, extensionUri?: vscode.Uri): 
 
   const icon = vscode.Uri.joinPath(extensionUri, 'resources', 'icon.png');
   panel.iconPath = { light: icon, dark: icon };
-}
-
-function getEchartsUri(webview: vscode.Webview, extensionUri?: vscode.Uri): string | undefined {
-  if (!extensionUri) {
-    return undefined;
-  }
-  return webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'vendor', 'echarts.min.js')).toString();
-}
-
-function getCssUri(webview: vscode.Webview, extensionUri?: vscode.Uri): string | undefined {
-  if (!extensionUri) {
-    return undefined;
-  }
-  return webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview', 'macos26.css')).toString();
 }

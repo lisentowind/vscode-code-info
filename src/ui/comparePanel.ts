@@ -207,6 +207,7 @@ function ensureComparePanel(
         ...(extensionUri ? { localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')] } : {})
       }
     );
+    applyComparePanelIcon(controller.panel, extensionUri);
 
     controller.panel.onDidDispose(() => {
       controller.panel = undefined;
@@ -293,9 +294,19 @@ async function runCompare(controller: ComparePanelControllerState): Promise<void
 
 function renderComparePanel(panel: vscode.WebviewPanel, state: ComparePanelState, extensionUri?: vscode.Uri): void {
   panel.title = 'Code Info · 变更对比';
+  applyComparePanelIcon(panel, extensionUri);
   panel.webview.html = getCompareHtml(panel.webview, state, {
     cssUri: getCssUri(panel.webview, extensionUri)
   });
+}
+
+export function applyComparePanelIcon(panel: vscode.WebviewPanel, extensionUri?: vscode.Uri): void {
+  if (!extensionUri) {
+    return;
+  }
+
+  const icon = vscode.Uri.joinPath(extensionUri, 'resources', 'icon.png');
+  panel.iconPath = { light: icon, dark: icon };
 }
 
 function getCssUri(webview: vscode.Webview, extensionUri?: vscode.Uri): string | undefined {

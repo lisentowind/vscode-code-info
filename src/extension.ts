@@ -1,20 +1,13 @@
 import * as vscode from 'vscode';
-import { analyzeRangeWorkspace } from './analysis/todayAnalyzer';
 import type { AnalysisDateRangePreset } from './analysis/dateRange';
-import { analyzeWorkspace } from './analysis/workspaceAnalyzer';
-import { exportStatsFile } from './export/exporter';
-import { showDashboardEmptyPanel, showEmptyIfOpen, showStatsPanel, updatePanelIfOpen, type DashboardPanelState } from './ui/panels';
-import { createInitialComparePanelState, resetComparePanel, showComparePanel, type ComparePanelControllerState } from './ui/comparePanel';
+import { registerCodeInfoCommands } from './app/commandRegistry';
+import { DashboardController } from './app/dashboardController';
+import { type DashboardPanelState } from './ui/panels';
+import { createInitialComparePanelState, type ComparePanelControllerState } from './ui/comparePanel';
 import { CodeInfoSidebarProvider } from './ui/sidebar';
-import { selectAnalysisDirectories } from './ui/scopePicker';
 import { CodeInfoStatusBarController } from './ui/statusBar';
 import { handleWebviewCommand } from './ui/webviewCommands';
-import type { DashboardData, TodayStats, WorkspaceStats } from './types';
 
-let latestProjectStats: WorkspaceStats | undefined;
-let latestTodayStats: TodayStats | undefined;
-let latestRangePreset: AnalysisDateRangePreset = 'today';
-let refreshTodayTask: Promise<TodayStats | undefined> | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 const dashboardPanelState: DashboardPanelState = { panel: undefined };
 const comparePanelState: ComparePanelControllerState = {
@@ -31,196 +24,19 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar);
 
   let sidebarProvider: CodeInfoSidebarProvider;
+  let controller: DashboardController;
   const refreshToday = async (preset?: AnalysisDateRangePreset): Promise<void> => {
-    await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true, preset });
+    await controller.refreshToday({ revealPanel: false, silent: true, preset, force: false });
   };
   sidebarProvider = new CodeInfoSidebarProvider(context.extensionUri, handleWebviewCommand, refreshToday);
-  sidebarProvider.render(getDashboardData());
-  statusBar.update(latestTodayStats);
+  controller = new DashboardController(sidebarProvider, statusBar, dashboardPanelState, outputChannel);
+  sidebarProvider.render(controller.getDashboardData());
+  statusBar.update(controller.getLatestTodayStats());
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(CodeInfoSidebarProvider.viewType, sidebarProvider),
-    vscode.commands.registerCommand('codeInfo.openCompare', async () => {
-      showComparePanel(comparePanelState, context.extensionUri);
-    }),
-    vscode.commands.registerCommand('codeInfo.showStats', async () => {
-      const stats = await analyzeAndSync(sidebarProvider, { revealPanel: true });
-      if (!latestTodayStats) {
-        await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
-      }
-      if (stats || latestTodayStats) {
-        showStatsPanel(dashboardPanelState, getDashboardData(), handleWebviewCommand, refreshToday, context.extensionUri);
-      }
-    }),
-    vscode.commands.registerCommand('codeInfo.selectAnalysisDirectories', async () => {
-      await selectAnalysisDirectories(outputChannel);
-      latestProjectStats = undefined;
-      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
-      sidebarProvider.render(getDashboardData());
-      showEmptyIfOpen(dashboardPanelState);
-    }),
-    vscode.commands.registerCommand('codeInfo.openPanel', async () => {
-      if (!latestTodayStats) {
-        await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
-      }
-
-      if (latestProjectStats || latestTodayStats) {
-        showStatsPanel(dashboardPanelState, getDashboardData(), handleWebviewCommand, refreshToday, context.extensionUri);
-        return;
-      }
-
-      showDashboardEmptyPanel(dashboardPanelState, handleWebviewCommand, refreshToday, context.extensionUri);
-    }),
-    vscode.commands.registerCommand('codeInfo.refreshStats', async () => {
-      await analyzeAndSync(sidebarProvider, { revealPanel: false });
-      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
-    }),
-    vscode.commands.registerCommand('codeInfo.refreshTodayStats', async () => {
-      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true, preset: 'today' });
-    }),
-    vscode.commands.registerCommand('codeInfo.refreshLast7DaysStats', async () => {
-      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true, preset: 'last7Days' });
-    }),
-    vscode.commands.registerCommand('codeInfo.refreshLast30DaysStats', async () => {
-      await refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true, preset: 'last30Days' });
-    }),
-    vscode.commands.registerCommand('codeInfo.export', async () => {
-      const stats = await ensureStats(sidebarProvider);
-      if (!stats) {
-        return;
-      }
-
-      const picked = await vscode.window.showQuickPick(
-        [
-          { label: 'JSON', format: 'json' as const },
-          { label: 'CSV', format: 'csv' as const }
-        ],
-        { placeHolder: '选择导出格式' }
-      );
-
-      if (!picked) {
-        return;
-      }
-
-      await exportStatsFile(stats, picked.format);
-    }),
-    vscode.commands.registerCommand('codeInfo.exportJson', async () => {
-      const stats = await ensureStats(sidebarProvider);
-      if (stats) {
-        await exportStatsFile(stats, 'json');
-      }
-    }),
-    vscode.commands.registerCommand('codeInfo.exportCsv', async () => {
-      const stats = await ensureStats(sidebarProvider);
-      if (stats) {
-        await exportStatsFile(stats, 'csv');
-      }
-    }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      latestProjectStats = undefined;
-      latestTodayStats = undefined;
-      resetComparePanel(comparePanelState);
-      sidebarProvider.render(getDashboardData());
-      statusBar.update(latestTodayStats);
-      showEmptyIfOpen(dashboardPanelState);
-    })
+    ...registerCodeInfoCommands(context, controller, dashboardPanelState, comparePanelState, refreshToday, outputChannel)
   );
-
-  void refreshTodayAndRender(sidebarProvider, statusBar, { revealPanel: false, silent: true });
 }
 
 export function deactivate(): void { }
-
-async function ensureStats(sidebarProvider: CodeInfoSidebarProvider): Promise<WorkspaceStats | undefined> {
-  if (latestProjectStats) {
-    return latestProjectStats;
-  }
-
-  return analyzeAndSync(sidebarProvider, { revealPanel: false });
-}
-
-async function analyzeAndSync(
-  sidebarProvider: CodeInfoSidebarProvider,
-  options: { revealPanel: boolean }
-): Promise<WorkspaceStats | undefined> {
-  const folders = vscode.workspace.workspaceFolders;
-
-  if (!folders || folders.length === 0) {
-    void vscode.window.showWarningMessage('Code Info: 请先打开一个工作区再执行统计。');
-    return undefined;
-  }
-
-  try {
-    const stats = await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Code Info 正在分析工作区...',
-        cancellable: false
-      },
-      async () => analyzeWorkspace(outputChannel)
-    );
-
-    latestProjectStats = stats;
-    sidebarProvider.render(getDashboardData());
-    updatePanelIfOpen(dashboardPanelState, getDashboardData(), { reveal: options.revealPanel });
-    return stats;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    void vscode.window.showErrorMessage(`Code Info 分析失败：${message}`);
-    return undefined;
-  }
-}
-
-function getDashboardData(): DashboardData {
-  return {
-    projectStats: latestProjectStats,
-    todayStats: latestTodayStats
-  };
-}
-
-async function refreshTodayAndRender(
-  sidebarProvider: CodeInfoSidebarProvider,
-  statusBar: CodeInfoStatusBarController,
-  options: { revealPanel: boolean; silent: boolean; preset?: AnalysisDateRangePreset }
-): Promise<TodayStats | undefined> {
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders || folders.length === 0) {
-    statusBar.update(undefined);
-    return undefined;
-  }
-
-  const requestedPreset = options.preset ?? latestRangePreset;
-  latestRangePreset = requestedPreset;
-
-  if (refreshTodayTask) {
-    await refreshTodayTask;
-    if (latestTodayStats?.rangePreset === requestedPreset) {
-      return latestTodayStats;
-    }
-
-    return refreshTodayAndRender(sidebarProvider, statusBar, { ...options, preset: requestedPreset });
-  }
-
-  statusBar.setLoading(true);
-  refreshTodayTask = (async () => {
-    try {
-      const stats = await analyzeRangeWorkspace(requestedPreset, outputChannel);
-      latestTodayStats = stats;
-      sidebarProvider.render(getDashboardData());
-      statusBar.update(latestTodayStats);
-      updatePanelIfOpen(dashboardPanelState, getDashboardData(), { reveal: options.revealPanel });
-      return stats;
-    } catch (error) {
-      if (!options.silent) {
-        const message = error instanceof Error ? error.message : String(error);
-        void vscode.window.showErrorMessage(`Code Info 范围统计失败：${message}`);
-      }
-      return undefined;
-    } finally {
-      statusBar.setLoading(false);
-      refreshTodayTask = undefined;
-    }
-  })();
-
-  return refreshTodayTask;
-}
