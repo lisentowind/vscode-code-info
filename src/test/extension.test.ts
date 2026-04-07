@@ -484,13 +484,28 @@ suite('Extension Test Suite', () => {
       { cspSource: 'vscode-webview:' } as vscode.Webview,
       {},
       {
-        compact: true,
+        compact: false,
         title: 'Code Info',
         subtitle: 'demo'
       }
     );
 
     assert.ok(html.includes('class="menu menu-toolbar"'));
+  });
+
+  test('compact dashboard uses dedicated compact menu classes for sidebar popovers', () => {
+    const html = getDashboardHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {},
+      {
+        compact: true,
+        title: 'Code Info',
+        subtitle: 'demo'
+      }
+    );
+
+    assert.ok(html.includes('class="menu menu-toolbar menu-range menu-compact"'));
+    assert.ok(html.includes('class="menu menu-toolbar menu-compact"'));
   });
 
   test('empty state exposes compare entry', () => {

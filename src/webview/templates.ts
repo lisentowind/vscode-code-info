@@ -124,6 +124,7 @@ export function getDashboardHtml(
   resources?: { echartsUri?: string; cssUri?: string }
 ): string {
   const nonce = getNonce();
+  const compactMenuClass = presentation.compact ? ' menu-compact' : '';
   const echartsScript = resources?.echartsUri ? `  <script nonce="${nonce}" src="${resources.echartsUri}"></script>` : '';
   const cssLink = resources?.cssUri ? `  <link rel="stylesheet" href="${resources.cssUri}" />` : '';
   const payload = JSON.stringify({ data, presentation })
@@ -661,7 +662,7 @@ ${echartsScript}
         '<button class="action secondary" data-command="openCompare">' + icon('git') + '变更对比</button>';
 
     const rangeMenuHtml =
-      '<details class="menu menu-toolbar menu-range" id="__codeInfoRangeMenu">' +
+      '<details class="menu menu-toolbar menu-range${compactMenuClass}" id="__codeInfoRangeMenu">' +
         '<summary class="action secondary" aria-label="切换统计范围">' + icon('today') + escapeHtml(rangeMenuLabel) + '</summary>' +
         '<div class="menu-popover" role="menu">' +
           '<div class="menu-group">' +
@@ -674,7 +675,7 @@ ${echartsScript}
       '</details>';
 
     const menuHtml =
-      '<details class="menu menu-toolbar" id="__codeInfoMenu">' +
+      '<details class="menu menu-toolbar${compactMenuClass}" id="__codeInfoMenu">' +
         '<summary class="action secondary" aria-label="打开操作菜单">' + icon('menu') + '更多操作</summary>' +
         '<div class="menu-popover" role="menu">' +
           '<div class="menu-group">' +
@@ -891,6 +892,26 @@ ${echartsScript}
       ro.observe(topbarInner);
     }
     const menus = Array.from(document.querySelectorAll('details.menu')).filter((menu) => menu instanceof HTMLDetailsElement);
+    const syncCompactMenuPopover = (menu) => {
+      if (!(menu instanceof HTMLDetailsElement) || !menu.classList.contains('menu-compact')) return;
+      const popover = menu.querySelector('.menu-popover');
+      const summary = menu.querySelector('summary');
+      if (!(popover instanceof HTMLElement) || !(summary instanceof HTMLElement)) return;
+
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
+      const gutter = 12;
+      const preferredWidth = Math.max(220, Math.min(320, viewportWidth - gutter * 2));
+      const menuRect = menu.getBoundingClientRect();
+      const summaryRect = summary.getBoundingClientRect();
+      const maxLeft = Math.max(gutter, viewportWidth - gutter - preferredWidth);
+      const alignLeft = menu.classList.contains('menu-range');
+      const desiredLeft = alignLeft
+        ? Math.min(Math.max(summaryRect.left, gutter), maxLeft)
+        : Math.min(Math.max(summaryRect.right - preferredWidth, gutter), maxLeft);
+
+      popover.style.setProperty('--menu-inline-start', String(desiredLeft - menuRect.left) + 'px');
+      popover.style.setProperty('--menu-width', String(preferredWidth) + 'px');
+    };
     const closeOpenMenus = (exceptMenu) => {
       let didClose = false;
       for (const menu of menus) {
@@ -905,7 +926,10 @@ ${echartsScript}
     for (const menu of menus) {
       if (!(menu instanceof HTMLDetailsElement)) continue;
       menu.addEventListener('toggle', () => {
-        if (menu.open) closeOpenMenus(menu);
+        if (menu.open) {
+          closeOpenMenus(menu);
+          syncCompactMenuPopover(menu);
+        }
         scheduleStickyTop();
       });
     }
@@ -923,11 +947,23 @@ ${echartsScript}
       closeOpenMenus();
     }, { passive: true });
     scheduleStickyTop();
+    for (const menu of menus) {
+      syncCompactMenuPopover(menu);
+    }
     if (document.fonts?.ready) {
-      document.fonts.ready.then(() => scheduleStickyTop()).catch(() => {});
+      document.fonts.ready.then(() => {
+        scheduleStickyTop();
+        for (const menu of menus) syncCompactMenuPopover(menu);
+      }).catch(() => {});
     }
     window.addEventListener('load', () => scheduleStickyTop(), { once: true });
-    window.addEventListener('resize', () => scheduleStickyTop(), { passive: true });
+    window.addEventListener('load', () => {
+      for (const menu of menus) syncCompactMenuPopover(menu);
+    }, { once: true });
+    window.addEventListener('resize', () => {
+      scheduleStickyTop();
+      for (const menu of menus) syncCompactMenuPopover(menu);
+    }, { passive: true });
     initCharts();
     document.addEventListener('click', (event) => {
       const navElement = event.target.closest('[data-nav]');

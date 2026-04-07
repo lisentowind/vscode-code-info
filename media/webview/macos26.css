@@ -390,6 +390,7 @@ body.compact .topbar-right { width: 100%; justify-content: flex-start; }
   position: absolute;
   top: calc(100% + 12px);
   right: 0;
+  left: auto;
   width: min(320px, calc(100vw - 32px));
   padding: 10px;
   border-radius: var(--radius-l);
@@ -415,6 +416,22 @@ body.compact .topbar-right { width: 100%; justify-content: flex-start; }
   left: 0;
   right: auto;
   transform-origin: top left;
+}
+
+.menu-compact .menu-popover {
+  left: var(--menu-inline-start, auto);
+  right: auto;
+  width: var(--menu-width, min(320px, calc(100vw - 24px)));
+  max-width: calc(100vw - 24px);
+}
+
+body.compact .menu-compact .menu-popover {
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 95%, var(--bg) 5%), color-mix(in srgb, var(--panel) 98%, black 2%));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--text) 5%, transparent) inset,
+    0 22px 50px color-mix(in srgb, black 30%, transparent);
+  backdrop-filter: saturate(135%) blur(20px);
 }
 
 .sidebar .menu-popover {
@@ -449,6 +466,19 @@ details.menu[open] .menu-popover { transform: translateY(0) scale(1); opacity: 1
 .menu-item .ui-icon { color: inherit; }
 .menu-item .menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-item .menu-hint { color: var(--muted); font-size: 12px; }
+
+body.compact .menu-compact .menu-item {
+  background: color-mix(in srgb, var(--panel) 94%, var(--bg) 6%);
+  border-color: color-mix(in srgb, var(--border-soft) 85%, transparent);
+}
+
+body.compact .menu-compact .menu-item:hover {
+  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
+}
+
+body.compact .menu-compact .menu-hint {
+  color: color-mix(in srgb, var(--text) 58%, var(--muted) 42%);
+}
 
 /* ---- Floating action buttons (panel view) ---- */
 .floatbar {
