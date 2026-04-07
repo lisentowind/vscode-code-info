@@ -5,11 +5,12 @@ import { buildDashboardShellHtml } from './dashboardShell';
 export function getEmptyStateHtml(
   webview: vscode.Webview,
   compact: boolean,
-  options?: { showOpenPanel?: boolean; cssUri?: string }
+  options?: { showOpenPanel?: boolean; cssUri?: string; gsapUri?: string }
 ): string {
   const nonce = getNonce();
   const showOpenPanel = options?.showOpenPanel ?? true;
   const cssUri = options?.cssUri;
+  const gsapUri = options?.gsapUri;
   const title = compact ? 'Code Info 侧边栏' : 'Code Info';
   const subtitle = compact ? '先切到插件加载今日统计，再按需执行项目分析。' : '先切到插件加载今日统计，再打开完整项目分析看板。';
   const openPanelButton = showOpenPanel ? '<button class="action secondary" data-command="openPanel">打开看板</button>' : '';
@@ -19,7 +20,7 @@ export function getEmptyStateHtml(
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   ${cssUri ? `<link rel="stylesheet" href="${cssUri}" />` : ''}
 </head>
@@ -97,8 +98,11 @@ export function getEmptyStateHtml(
       </section>
     </main>
   </div>
+  ${gsapUri ? `<script nonce="${nonce}" src="${gsapUri}"></script>` : ''}
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const motionState = vscode.getState() || {};
+    const shouldPlayIntro = !motionState.emptyIntroPlayed;
     const topbar = document.querySelector('.topbar');
     const sentinel = document.querySelector('.sticky-sentinel');
     if (topbar && sentinel && typeof IntersectionObserver !== 'undefined') {
@@ -113,6 +117,43 @@ export function getEmptyStateHtml(
       if (element.hasAttribute('disabled')) return;
       vscode.postMessage({ command: element.getAttribute('data-command') });
     });
+    if (typeof gsap !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && shouldPlayIntro) {
+      const animateGroupWhenVisible = (selector, vars, options = {}) => {
+        const nodes = Array.from(document.querySelectorAll(selector));
+        if (!nodes.length) return;
+        gsap.set(nodes, { autoAlpha: 0, y: 18 });
+        if (typeof IntersectionObserver === 'undefined') {
+          gsap.to(nodes, vars);
+          return;
+        }
+        const observer = new IntersectionObserver((entries, currentObserver) => {
+          const visible = entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target);
+          if (!visible.length) return;
+          gsap.to(visible, vars);
+          visible.forEach((node) => currentObserver.unobserve(node));
+        }, { threshold: options.threshold || 0.18, rootMargin: options.rootMargin || '0px 0px -8% 0px' });
+        nodes.forEach((node) => observer.observe(node));
+      };
+
+      gsap.fromTo('.topbar-inner', { autoAlpha: 0, y: 18 }, {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.72,
+        ease: 'power3.out'
+      });
+      animateGroupWhenVisible('.panel', { autoAlpha: 1, y: 0, duration: 0.72, ease: 'power3.out' });
+      animateGroupWhenVisible('.step', { autoAlpha: 1, y: 0, duration: 0.64, ease: 'power3.out', stagger: 0.08 });
+      animateGroupWhenVisible('.hint', { autoAlpha: 1, y: 0, duration: 0.56, ease: 'power3.out' });
+      gsap.to('.empty-art', {
+        y: -10,
+        rotate: 4,
+        duration: 2.8,
+        ease: 'sine.inOut',
+        repeat: -1,
+        yoyo: true
+      });
+      vscode.setState({ ...motionState, emptyIntroPlayed: true });
+    }
   </script>
 </body>
 </html>`;
@@ -122,7 +163,7 @@ export function getDashboardHtml(
   webview: vscode.Webview,
   data: DashboardData,
   presentation: PresentationMode,
-  resources?: { echartsUri?: string; cssUri?: string; scriptUri?: string }
+  resources?: { echartsUri?: string; cssUri?: string; gsapUri?: string; scriptUri?: string }
 ): string {
   const payload = JSON.stringify({ data, presentation })
     .replace(/</g, '\\u003c')
@@ -135,6 +176,7 @@ export function getDashboardHtml(
     bodyHtml: resources?.scriptUri ? '' : getDashboardFallbackHtml(data, presentation),
     cssUri: resources?.cssUri,
     echartsUri: resources?.echartsUri,
+    gsapUri: resources?.gsapUri,
     scriptUri: resources?.scriptUri
   });
 }

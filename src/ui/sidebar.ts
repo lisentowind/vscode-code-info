@@ -45,7 +45,10 @@ export class CodeInfoSidebarProvider implements vscode.WebviewViewProvider {
     const resources = buildDashboardWebviewResources(this.view.webview, this.extensionUri);
 
     if (!data?.projectStats && !data?.todayStats) {
-      this.view.webview.html = getEmptyStateHtml(this.view.webview, true, { cssUri: resources.cssUri });
+      this.view.webview.html = getEmptyStateHtml(this.view.webview, true, {
+        cssUri: resources.cssUri,
+        gsapUri: resources.gsapUri
+      });
       return;
     }
 
@@ -58,6 +61,7 @@ export class CodeInfoSidebarProvider implements vscode.WebviewViewProvider {
     this.view.webview.html = getDashboardHtml(this.view.webview, data, presentation, {
       echartsUri: resources.echartsUri,
       cssUri: resources.cssUri,
+      gsapUri: resources.gsapUri,
       scriptUri: resources.scriptUri
     });
   }

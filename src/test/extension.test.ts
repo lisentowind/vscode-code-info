@@ -387,6 +387,7 @@ suite('Extension Test Suite', () => {
 
     assert.ok(resources.cssUri?.endsWith('/media/webview/macos26.css'));
     assert.ok(resources.echartsUri?.endsWith('/media/vendor/echarts.min.js'));
+    assert.ok(resources.gsapUri?.endsWith('/media/vendor/gsap.min.js'));
     assert.ok(resources.scriptUri?.endsWith('/media/webview/dashboard.js'));
   });
 
@@ -400,6 +401,7 @@ suite('Extension Test Suite', () => {
     assert.deepStrictEqual(resources, {
       cssUri: undefined,
       echartsUri: undefined,
+      gsapUri: undefined,
       scriptUri: undefined
     });
   });
@@ -413,6 +415,7 @@ suite('Extension Test Suite', () => {
         bodyHtml: '<section>demo</section>',
         cssUri: 'vscode-webview://style.css',
         echartsUri: 'vscode-webview://echarts.js',
+        gsapUri: 'vscode-webview://gsap.js',
         scriptUri: 'vscode-webview://dashboard.js'
       }
     );
@@ -420,6 +423,7 @@ suite('Extension Test Suite', () => {
     assert.ok(html.includes('<script nonce='));
     assert.ok(html.includes('id="__codeInfoPayload" type="application/json">{"ok":true}</script>'));
     assert.ok(html.includes('<div id="app" class="shell"><section>demo</section></div>'));
+    assert.ok(html.includes('src="vscode-webview://gsap.js"'));
     assert.ok(html.includes('src="vscode-webview://dashboard.js"'));
     assert.ok(!html.includes('const vscode = acquireVsCodeApi();'));
   });
@@ -603,6 +607,27 @@ suite('Extension Test Suite', () => {
 
     assert.ok(html.includes('data-command="openCompare"'));
     assert.ok(html.includes('变更对比'));
+  });
+
+  test('empty state waits until elements enter the viewport before animating', () => {
+    const html = getEmptyStateHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      false,
+      { gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('IntersectionObserver'));
+  });
+
+  test('empty state persists motion state to avoid replaying intro on view switches', () => {
+    const html = getEmptyStateHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      false,
+      { gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('getState()'));
+    assert.ok(html.includes('setState('));
   });
 
   test('dashboard shell injects runtime entry in compact and full layouts', () => {

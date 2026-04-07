@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 export type DashboardWebviewResources = {
   cssUri: string | undefined;
   echartsUri: string | undefined;
+  gsapUri: string | undefined;
   scriptUri: string | undefined;
 };
 
@@ -14,12 +15,14 @@ export function buildDashboardShellHtml(
     bodyHtml: string;
     cssUri?: string;
     echartsUri?: string;
+    gsapUri?: string;
     scriptUri?: string;
   }
 ): string {
   const nonce = getNonce();
   const cssLink = options.cssUri ? `  <link rel="stylesheet" href="${options.cssUri}" />` : '';
   const echartsScript = options.echartsUri ? `  <script nonce="${nonce}" src="${options.echartsUri}"></script>` : '';
+  const gsapScript = options.gsapUri ? `  <script nonce="${nonce}" src="${options.gsapUri}"></script>` : '';
   const runtimeScript = options.scriptUri ? `  <script nonce="${nonce}" src="${options.scriptUri}"></script>` : '';
 
   return `<!DOCTYPE html>
@@ -36,6 +39,7 @@ ${cssLink}
   <div id="app" class="shell">${options.bodyHtml}</div>
   <pre id="error" style="display:none;white-space:pre-wrap;padding:12px;border:1px solid var(--border);border-radius:12px;"></pre>
 ${echartsScript}
+${gsapScript}
 ${runtimeScript}
 </body>
 </html>`;
@@ -49,6 +53,7 @@ export function buildDashboardWebviewResources(
     return {
       cssUri: undefined,
       echartsUri: undefined,
+      gsapUri: undefined,
       scriptUri: undefined
     };
   }
@@ -56,6 +61,7 @@ export function buildDashboardWebviewResources(
   return {
     cssUri: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview', 'macos26.css')).toString(),
     echartsUri: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'vendor', 'echarts.min.js')).toString(),
+    gsapUri: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'vendor', 'gsap.min.js')).toString(),
     scriptUri: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview', 'dashboard.js')).toString()
   };
 }

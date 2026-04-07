@@ -52,7 +52,8 @@ export function showDashboardEmptyPanel(
   applyPanelIcon(panel, extensionUri);
   panel.webview.html = getEmptyStateHtml(panel.webview, false, {
     showOpenPanel: false,
-    cssUri: buildDashboardWebviewResources(panel.webview, extensionUri).cssUri
+    cssUri: buildDashboardWebviewResources(panel.webview, extensionUri).cssUri,
+    gsapUri: buildDashboardWebviewResources(panel.webview, extensionUri).gsapUri
   });
   panel.reveal(vscode.ViewColumn.One, false);
 }
@@ -63,7 +64,8 @@ export function showEmptyIfOpen(state: DashboardPanelState): void {
   }
   state.panel.webview.html = getEmptyStateHtml(state.panel.webview, false, {
     showOpenPanel: false,
-    cssUri: buildDashboardWebviewResources(state.panel.webview, state.extensionUri).cssUri
+    cssUri: buildDashboardWebviewResources(state.panel.webview, state.extensionUri).cssUri,
+    gsapUri: buildDashboardWebviewResources(state.panel.webview, state.extensionUri).gsapUri
   });
 }
 
@@ -79,6 +81,7 @@ function renderPanel(panel: vscode.WebviewPanel, data: DashboardData, extensionU
   panel.webview.html = getDashboardHtml(panel.webview, data, presentation, {
     echartsUri: resources.echartsUri,
     cssUri: resources.cssUri,
+    gsapUri: resources.gsapUri,
     scriptUri: resources.scriptUri
   });
 }

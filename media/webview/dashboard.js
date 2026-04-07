@@ -1,4 +1,5 @@
 const vscode = acquireVsCodeApi();
+const motionState = vscode.getState() || {};
 const errorBox = document.getElementById('error');
 const palette = ['#5B8FF9', '#5AD8A6', '#5D7092', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99', '#FF99C3'];
 
@@ -25,6 +26,7 @@ try {
 const projectStats = data.projectStats;
 const todayStats = data.todayStats;
 const compactMenuClass = presentation.compact ? ' menu-compact' : '';
+const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let app = document.getElementById('app');
 if (!app) {
   app = document.createElement('div');
@@ -728,6 +730,117 @@ const updateStickyTop = () => {
 const scheduleStickyTop = () => {
   requestAnimationFrame(() => requestAnimationFrame(() => updateStickyTop()));
 };
+function animateCount(node) {
+  if (!(node instanceof HTMLElement)) return;
+  if (node.dataset.countAnimated === 'true') return;
+  const originalText = (node.dataset.originalText || node.textContent || '').trim();
+  if (!originalText) return;
+  node.dataset.originalText = originalText;
+
+  const numberMatch = originalText.match(/-?\d[\d,.]*/);
+  if (!numberMatch) return;
+  const parsedValue = Number.parseFloat(numberMatch[0].replace(/,/g, ''));
+  if (!Number.isFinite(parsedValue)) return;
+
+  node.dataset.countAnimated = 'true';
+  const state = { value: 0 };
+  gsap.to(state, {
+    value: parsedValue,
+    duration: 1.1,
+    ease: 'power2.out',
+    onUpdate: () => {
+      const formatted = Math.round(state.value).toLocaleString('zh-CN');
+      node.textContent = originalText.replace(numberMatch[0], formatted);
+    },
+    onComplete: () => {
+      node.textContent = originalText;
+    }
+  });
+}
+function initAnimations() {
+  if (typeof gsap === 'undefined' || prefersReducedMotion || motionState.dashboardIntroPlayed) {
+    return;
+  }
+
+  gsap.defaults({ ease: 'power3.out' });
+  const animateWhenVisible = (selector, vars, options) => {
+    const nodes = gsap.utils.toArray(selector);
+    if (!nodes.length) return;
+    gsap.set(nodes, { autoAlpha: 0, y: 18 });
+    if (typeof IntersectionObserver === 'undefined') {
+      gsap.to(nodes, vars);
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries, currentObserver) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target);
+      if (!visible.length) return;
+      gsap.to(visible, vars);
+      visible.forEach((node) => currentObserver.unobserve(node));
+    }, {
+      threshold: options?.threshold ?? 0.16,
+      rootMargin: options?.rootMargin ?? '0px 0px -8% 0px'
+    });
+
+    nodes.forEach((node) => observer.observe(node));
+  };
+
+  gsap.fromTo('.topbar-inner', { autoAlpha: 0, y: 18 }, {
+    autoAlpha: 1,
+    y: 0,
+    duration: 0.72
+  });
+  if (!presentation.compact) {
+    animateWhenVisible('.rail-chip', { autoAlpha: 1, y: 0, duration: 0.64, stagger: 0.06 });
+    animateWhenVisible('.nav-item', { autoAlpha: 1, y: 0, duration: 0.62, stagger: 0.05 });
+  }
+  animateWhenVisible('.card', { autoAlpha: 1, y: 0, duration: 0.62, stagger: 0.04 });
+  animateWhenVisible('.panel', { autoAlpha: 1, y: 0, duration: 0.68, stagger: 0.05 });
+  animateWhenVisible('.fab-button', { autoAlpha: 1, y: 0, scale: 1, duration: 0.56, stagger: 0.05 });
+  animateWhenVisible('.bar-row, .git-block, .author-item, .tree-node, .tree-file-row, tbody tr', {
+    autoAlpha: 1,
+    y: 0,
+    duration: 0.5,
+    stagger: 0.018
+  });
+
+  gsap.utils.toArray('.metric-value, .rail-value').forEach((node) => animateCount(node));
+  gsap.utils.toArray('.badge').forEach((node, index) => {
+    gsap.fromTo(node, { autoAlpha: 0, y: -10, scale: 0.96 }, {
+      autoAlpha: 1,
+      y: 0,
+      scale: 1,
+      duration: 0.48,
+      delay: 0.16 + index * 0.04
+    });
+  });
+  gsap.utils.toArray('.bar-fill, .mini-fill').forEach((node, index) => {
+    const width = node.style.width;
+    gsap.fromTo(node, { width: '0%' }, {
+      width,
+      duration: 0.9,
+      delay: 0.22 + index * 0.02,
+      ease: 'power2.out'
+    });
+  });
+  gsap.utils.toArray('.stack > div').forEach((node, index) => {
+    const width = node.style.width;
+    gsap.fromTo(node, { width: '0%' }, {
+      width,
+      duration: 0.75,
+      delay: 0.26 + index * 0.06,
+      ease: 'power2.out'
+    });
+  });
+  gsap.to('.floatbar', {
+    y: -8,
+    duration: 2.8,
+    ease: 'sine.inOut',
+    repeat: -1,
+    yoyo: true
+  });
+  vscode.setState({ ...motionState, dashboardIntroPlayed: true });
+}
 app.innerHTML = '<div class="sticky-sentinel" aria-hidden="true"></div>' + html;
 const topbar = document.querySelector('.topbar');
 const sentinel = document.querySelector('.sticky-sentinel');
@@ -781,6 +894,18 @@ for (const menu of menus) {
     if (menu.open) {
       closeOpenMenus(menu);
       syncCompactMenuPopover(menu);
+      if (typeof gsap !== 'undefined' && !prefersReducedMotion) {
+        const popover = menu.querySelector('.menu-popover');
+        if (popover) {
+          gsap.fromTo(popover, { autoAlpha: 0, y: -10, scale: 0.96 }, {
+            autoAlpha: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.24,
+            ease: 'power2.out'
+          });
+        }
+      }
     }
     scheduleStickyTop();
   });
@@ -817,6 +942,7 @@ window.addEventListener('resize', () => {
   for (const menu of menus) syncCompactMenuPopover(menu);
 }, { passive: true });
 initCharts();
+initAnimations();
 document.addEventListener('click', (event) => {
   const navElement = event.target.closest('[data-nav]');
   if (navElement) {
@@ -824,6 +950,17 @@ document.addEventListener('click', (event) => {
     const target = targetId ? document.getElementById(targetId) : null;
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (typeof gsap !== 'undefined' && !prefersReducedMotion) {
+        gsap.fromTo(target, { y: 12 }, { y: 0, duration: 0.42, ease: 'power2.out' });
+        gsap.fromTo(target, {
+          boxShadow: '0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent)'
+        }, {
+          boxShadow: '0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 22px 44px color-mix(in srgb, black 14%, transparent)',
+          duration: 0.34,
+          yoyo: true,
+          repeat: 1
+        });
+      }
       for (const item of document.querySelectorAll('[data-nav].active')) {
         item.classList.remove('active');
       }

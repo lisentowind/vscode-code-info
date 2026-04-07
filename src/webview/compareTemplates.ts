@@ -5,9 +5,10 @@ import type { ComparePanelState } from '../ui/comparePanel';
 export function getCompareHtml(
   webview: vscode.Webview,
   state: ComparePanelState,
-  resources?: { cssUri?: string }
+  resources?: { cssUri?: string; gsapUri?: string }
 ): string {
   const cssLink = resources?.cssUri ? `<link rel="stylesheet" href="${resources.cssUri}" />` : '';
+  const gsapScript = resources?.gsapUri ? `<script src="${resources.gsapUri}"></script>` : '';
   const modeLabel = state.mode === 'branch' ? '当前分支 vs main/master' : '两个 Commit 对比';
   const result = state.latestResult;
 
@@ -15,7 +16,7 @@ export function getCompareHtml(
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'unsafe-inline';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Code Info Compare</title>
   ${cssLink}
@@ -67,8 +68,63 @@ export function getCompareHtml(
       extra: `+${item.addedLines} / -${item.deletedLines}`
     })), '暂无热点文件。') : ''}
   </main>
+  ${gsapScript}
   <script>
     const vscode = acquireVsCodeApi();
+    const motionState = vscode.getState() || {};
+    const shouldPlayIntro = !motionState.compareIntroPlayed;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (typeof gsap !== 'undefined' && !prefersReducedMotion && shouldPlayIntro) {
+      const animateWhenVisible = (selector, vars, options = {}) => {
+        const nodes = Array.from(document.querySelectorAll(selector));
+        if (!nodes.length) return;
+        gsap.set(nodes, { autoAlpha: 0, y: 20 });
+        if (typeof IntersectionObserver === 'undefined') {
+          gsap.to(nodes, vars);
+          return;
+        }
+        const observer = new IntersectionObserver((entries, currentObserver) => {
+          const visible = entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target);
+          if (!visible.length) return;
+          gsap.to(visible, vars);
+          visible.forEach((node) => currentObserver.unobserve(node));
+        }, { threshold: options.threshold || 0.18, rootMargin: options.rootMargin || '0px 0px -10% 0px' });
+        nodes.forEach((node) => observer.observe(node));
+      };
+
+      gsap.fromTo('.compare-header', { autoAlpha: 0, y: 20 }, {
+        autoAlpha: 1,
+        y: 0,
+        duration: 0.72,
+        ease: 'power3.out'
+      });
+      animateWhenVisible('.compare-panel', { autoAlpha: 1, y: 0, duration: 0.68, ease: 'power3.out' });
+      animateWhenVisible('.compare-summary-grid', { autoAlpha: 1, y: 0, duration: 0.66, ease: 'power3.out' });
+      animateWhenVisible('.compare-file-row', { autoAlpha: 1, y: 0, duration: 0.58, ease: 'power3.out', stagger: 0.03 });
+      animateWhenVisible('.compare-delta-row', { autoAlpha: 1, y: 0, duration: 0.56, ease: 'power3.out', stagger: 0.02 });
+      gsap.utils.toArray('.compare-card-value').forEach((node) => {
+        const original = (node.textContent || '').trim();
+        const numberMatch = original.match(/-?\\d+/);
+        if (!numberMatch) return;
+        const target = Number.parseInt(numberMatch[0], 10);
+        if (!Number.isFinite(target)) return;
+        const state = { value: 0 };
+        gsap.to(state, {
+          value: target,
+          duration: 1,
+          ease: 'power2.out',
+          onUpdate: () => {
+            node.textContent = original.replace(numberMatch[0], String(Math.round(state.value)));
+          },
+          onComplete: () => {
+            node.textContent = original;
+          }
+        });
+      });
+      vscode.setState({ ...motionState, compareIntroPlayed: true });
+    }
+
     document.addEventListener('click', (event) => {
       const element = event.target.closest('[data-command]');
       if (!element) return;

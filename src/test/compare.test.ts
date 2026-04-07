@@ -605,6 +605,37 @@ suite('Compare Primitives Test Suite', () => {
     assert.ok(errorHtml.includes('invalid sha'));
   });
 
+  test('getCompareHtml injects gsap runtime when provided', () => {
+    const html = getCompareHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      createInitialComparePanelState(),
+      { cssUri: 'vscode-webview://style.css', gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('src="vscode-webview://gsap.js"'));
+  });
+
+  test('getCompareHtml defers animations until sections enter the viewport', () => {
+    const html = getCompareHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      createInitialComparePanelState(),
+      { cssUri: 'vscode-webview://style.css', gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('IntersectionObserver'));
+  });
+
+  test('getCompareHtml persists motion state to avoid replaying intro on view switches', () => {
+    const html = getCompareHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      createInitialComparePanelState(),
+      { cssUri: 'vscode-webview://style.css', gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('getState()'));
+    assert.ok(html.includes('setState('));
+  });
+
   test('getCompareHtml renders local branch dropdowns in branch mode', () => {
     const state = {
       ...createInitialComparePanelState(),

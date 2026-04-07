@@ -296,7 +296,8 @@ function renderComparePanel(panel: vscode.WebviewPanel, state: ComparePanelState
   panel.title = 'Code Info · 变更对比';
   applyComparePanelIcon(panel, extensionUri);
   panel.webview.html = getCompareHtml(panel.webview, state, {
-    cssUri: getCssUri(panel.webview, extensionUri)
+    cssUri: getCssUri(panel.webview, extensionUri),
+    gsapUri: getGsapUri(panel.webview, extensionUri)
   });
 }
 
@@ -314,4 +315,12 @@ function getCssUri(webview: vscode.Webview, extensionUri?: vscode.Uri): string |
     return undefined;
   }
   return webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview', 'macos26.css')).toString();
+}
+
+function getGsapUri(webview: vscode.Webview, extensionUri?: vscode.Uri): string | undefined {
+  if (!extensionUri) {
+    return undefined;
+  }
+
+  return webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'vendor', 'gsap.min.js')).toString();
 }
