@@ -1,12 +1,14 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import * as vscode from 'vscode';
-import { analyzeGitTodayChanges } from '../git/today';
+import { analyzeGitTodayChanges, createUnavailableGitTodayChangeSummary } from '../git/today';
 import type { Logger, TodayDeletedFile, TodayFileStat, TodayStats } from '../types';
 import { createPresetDateRange, formatDateRangeLabel, type AnalysisDateRangePreset } from './dateRange';
+import { createGeneratedAt, createTodayAnalysisSources } from './metadata';
 import { collectAnalyzedFiles } from './shared';
 import { findWorkspaceFilesForAnalysis, getWorkerCount, isBinaryLike } from './targets';
 import { buildLanguageSummaries } from './summaries';
+import { resolveWorkspaceGitSupport } from '../workspace/rootSupport';
 
 type FileTimestampStatus =
   | { kind: 'skip' }
@@ -32,7 +34,10 @@ export async function analyzeRangeWorkspace(
   const initialBinarySkips = uris.length - textUris.length;
   const range = createPresetDateRange(preset);
   const gitSinceLabel = formatDateRangeLabel(range.start, range.end);
-  const gitChanges = await analyzeGitTodayChanges(gitRoot, range.start);
+  const gitSupport = resolveWorkspaceGitSupport(folders);
+  const gitChanges = gitSupport.supported
+    ? await analyzeGitTodayChanges(gitRoot, range.start)
+    : createUnavailableGitTodayChangeSummary(gitSupport.reason);
   const deletedFiles: TodayDeletedFile[] = gitChanges.available
     ? gitChanges.deletedFiles
       .map((filePath) => {
@@ -102,6 +107,8 @@ export async function analyzeRangeWorkspace(
   const topLanguage = languages[0];
   const topTouchedFile = sortedTouchedFiles[0];
   const durationMs = Date.now() - startTime;
+  const generatedAt = createGeneratedAt();
+  const sources = createTodayAnalysisSources(gitChanges.available);
 
   logger?.appendLine(
     `Today analysis done: ${scopeSummary} (touched: ${touchedFiles.length}, deleted: ${deletedFiles.length}, duration: ${durationMs}ms)`
@@ -109,7 +116,8 @@ export async function analyzeRangeWorkspace(
 
   return {
     workspaceName: folders.length === 1 ? folders[0].name : 'Multi-root Workspace',
-    generatedAt: new Date().toLocaleString(),
+    generatedAt: generatedAt.generatedAt,
+    generatedAtMs: generatedAt.generatedAtMs,
     rangePreset: preset,
     rangeLabel: range.label,
     totals,
@@ -132,7 +140,9 @@ export async function analyzeRangeWorkspace(
       skippedUnreadableFiles,
       scopeSummary,
       gitAvailable: gitChanges.available,
-      gitSince: gitSinceLabel
+      gitUnavailableReason: gitChanges.unavailableReason,
+      gitSince: gitSinceLabel,
+      sources
     }
   };
 }

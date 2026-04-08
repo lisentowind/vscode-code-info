@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { getAnalysisModuleDepthSetting } from '../config/settings';
-import { analyzeGitHistory } from '../git/history';
+import { analyzeGitHistory, createUnavailableGitStats } from '../git/history';
 import type { Logger, WorkspaceStats } from '../types';
+import { createGeneratedAt } from './metadata';
 import {
   buildDirectoryTree,
   buildDirectorySummaries,
@@ -13,6 +14,7 @@ import {
 } from './summaries';
 import { collectAnalyzedFiles } from './shared';
 import { findWorkspaceFilesForAnalysis, getWorkerCount, isBinaryLike } from './targets';
+import { resolveWorkspaceGitSupport } from '../workspace/rootSupport';
 
 export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats> {
   const startTime = Date.now();
@@ -38,8 +40,12 @@ export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats>
   const todoSummary = buildTodoSummary(fileStats);
   const todoHotspots = buildTodoHotspots(fileStats);
   const insights = buildWorkspaceInsights(totals, languages, directories, todoSummary);
-  const git = await analyzeGitHistory(gitRoot);
+  const gitSupport = resolveWorkspaceGitSupport(folders);
+  const git = gitSupport.supported
+    ? await analyzeGitHistory(gitRoot)
+    : createUnavailableGitStats(gitSupport.reason);
   const durationMs = Date.now() - startTime;
+  const generatedAt = createGeneratedAt();
 
   logger?.appendLine(
     `Analysis done: ${scopeSummary} (matched: ${uris.length}, analyzed: ${fileStats.length}, duration: ${durationMs}ms)`
@@ -47,7 +53,8 @@ export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats>
 
   return {
     workspaceName: folders.length === 1 ? folders[0].name : 'Multi-root Workspace',
-    generatedAt: new Date().toLocaleString(),
+    generatedAt: generatedAt.generatedAt,
+    generatedAtMs: generatedAt.generatedAtMs,
     totals,
     languages,
     directories,

@@ -11,6 +11,7 @@ export function getCompareHtml(
   const gsapScript = resources?.gsapUri ? `<script src="${resources.gsapUri}"></script>` : '';
   const modeLabel = state.mode === 'branch' ? '当前分支 vs main/master' : '两个 Commit 对比';
   const result = state.latestResult;
+  const unsupportedMultiRoot = isMultiRootUnsupportedError(state.latestError);
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -43,13 +44,13 @@ export function getCompareHtml(
         ${state.mode === 'branch'
           ? renderBranchSelectors(state.branchOptions, state.baseRef, state.headRef)
           : renderCommitInputs(state.baseRef, state.headRef)}
-        <button class="compare-run" data-command="compare:run">开始对比</button>
+        <button class="compare-run" data-command="compare:run"${unsupportedMultiRoot ? ' disabled' : ''}>开始对比</button>
       </div>
       ${state.status === 'loading' ? '<div class="compare-banner">正在计算这次对比</div>' : ''}
       ${state.latestError ? `<div class="compare-banner compare-banner-error">${escapeHtml(state.latestError)}</div>` : ''}
     </section>
 
-    ${result ? renderSummarySection(result.summary) : '<section class="compare-panel panel-surface"><div class="compare-empty">还没有对比结果，先选择模式并运行一次。</div></section>'}
+    ${result ? renderSummarySection(result.summary) : `<section class="compare-panel panel-surface"><div class="compare-empty">${escapeHtml(resolveEmptyMessage(state.latestError))}</div></section>`}
     ${result ? renderFilesSection(result.files) : ''}
     ${result ? renderDeltaSection('语言变化', result.languages.map((item) => ({
       label: item.language,
@@ -261,6 +262,18 @@ export function getCompareHtml(
   </script>
 </body>
 </html>`;
+}
+
+function resolveEmptyMessage(latestError?: string): string {
+  if (isMultiRootUnsupportedError(latestError)) {
+    return '多根工作区下暂不支持变更对比，请切换到单根工作区后再使用。';
+  }
+
+  return '还没有对比结果，先选择模式并运行一次。';
+}
+
+function isMultiRootUnsupportedError(latestError?: string): boolean {
+  return Boolean(latestError?.includes('多根工作区'));
 }
 
 function renderBranchSelectors(branchOptions: string[], baseRef: string, headRef: string): string {

@@ -1,7 +1,9 @@
+import type { GitUnavailableReason } from '../types';
 import { isGitRepository, parseDeletedFilesOutput, parseNumstatOutput, runGit } from './common';
 
 export type GitTodayChangeSummary = {
   available: boolean;
+  unavailableReason?: GitUnavailableReason;
   addedLines: number;
   deletedLines: number;
   deletedFiles: string[];
@@ -12,7 +14,7 @@ export async function analyzeGitTodayChanges(gitRoot: string, since: Date): Prom
 
   try {
     if (!(await isGitRepository(gitRoot))) {
-      throw new Error('Not a git repository');
+      return createUnavailableGitTodayChangeSummary('not-git-repository');
     }
 
     const deletedOutput = await runGit(
@@ -31,13 +33,18 @@ export async function analyzeGitTodayChanges(gitRoot: string, since: Date): Prom
       deletedFiles: [...deletedFiles.values()]
     };
   } catch {
-    return {
-      available: false,
-      addedLines: 0,
-      deletedLines: 0,
-      deletedFiles: []
-    };
+    return createUnavailableGitTodayChangeSummary('git-error');
   }
+}
+
+export function createUnavailableGitTodayChangeSummary(reason: GitUnavailableReason): GitTodayChangeSummary {
+  return {
+    available: false,
+    unavailableReason: reason,
+    addedLines: 0,
+    deletedLines: 0,
+    deletedFiles: []
+  };
 }
 
 function formatLocalSince(value: Date): string {

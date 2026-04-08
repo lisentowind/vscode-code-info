@@ -4,11 +4,13 @@ import { join } from 'path';
 import * as vscode from 'vscode';
 import { collectAnalyzedFiles } from '../analysis/shared';
 import { createPresetDateRange, formatDateRangeLabel } from '../analysis/dateRange';
+import { createGeneratedAt, createTodayAnalysisSources } from '../analysis/metadata';
 import { decideRangeRefresh } from '../app/refreshPolicy';
 import { countTextMetrics } from '../analysis/lineMetrics';
 import { buildDirectorySummaries, buildDirectoryTree } from '../analysis/summaries';
 import { sortTouchedFiles } from '../analysis/todayAnalyzer';
 import { buildWeeklyBuckets, getWeekBucketKey, parseDeletedFilesOutput, parseNumstatOutput } from '../git/common';
+import { getSingleRootPathOrError, resolveWorkspaceGitSupport } from '../workspace/rootSupport';
 import { createDashboardPanelOptions, getDashboardPanelTitle } from '../ui/panels';
 import { buildDashboardShellHtml, buildDashboardWebviewResources } from '../webview/dashboardShell';
 import { getDashboardHtml, getEmptyStateHtml } from '../webview/templates';
@@ -222,6 +224,46 @@ suite('Extension Test Suite', () => {
     assert.strictEqual(getWeekBucketKey(new Date('2026-03-29T23:00:00Z')), '2026-03-23');
   });
 
+  test('resolveWorkspaceGitSupport disables git-backed analytics in multi-root workspaces', () => {
+    assert.deepStrictEqual(resolveWorkspaceGitSupport(undefined), {
+      supported: false,
+      reason: 'no-workspace-folder'
+    });
+
+    assert.deepStrictEqual(
+      resolveWorkspaceGitSupport([
+        { name: 'client', uri: vscode.Uri.file('/tmp/client') },
+        { name: 'server', uri: vscode.Uri.file('/tmp/server') }
+      ] as never),
+      {
+        supported: false,
+        reason: 'multi-root-workspace'
+      }
+    );
+
+    assert.deepStrictEqual(
+      resolveWorkspaceGitSupport([{ name: 'app', uri: vscode.Uri.file('/tmp/app') }] as never),
+      {
+        supported: true,
+        rootPath: '/tmp/app'
+      }
+    );
+  });
+
+  test('getSingleRootPathOrError rejects compare usage in multi-root workspaces with explicit guidance', () => {
+    assert.throws(
+      () =>
+        getSingleRootPathOrError(
+          [
+            { name: 'client', uri: vscode.Uri.file('/tmp/client') },
+            { name: 'server', uri: vscode.Uri.file('/tmp/server') }
+          ] as never,
+          '变更对比'
+        ),
+      /暂不支持多根工作区/
+    );
+  });
+
   test('getDashboardPanelTitle prefers project stats, then today stats, then fallback', () => {
     assert.strictEqual(
       getDashboardPanelTitle({
@@ -345,6 +387,27 @@ suite('Extension Test Suite', () => {
     });
   });
 
+  test('decideRangeRefresh reuses cached stats from generatedAtMs without parsing localized text', () => {
+    const decision = decideRangeRefresh({
+      requestedPreset: 'today',
+      latestPreset: 'today',
+      latestStats: {
+        generatedAt: '2026年4月7日 13:00:00',
+        generatedAtMs: new Date('2026-04-07T05:00:00.000Z').getTime(),
+        rangePreset: 'today'
+      } as never,
+      maxAgeMs: 60_000,
+      now: new Date('2026-04-07T05:00:30.000Z').getTime()
+    });
+
+    assert.deepStrictEqual(decision, {
+      preset: 'today',
+      useCached: true,
+      waitForInFlight: false,
+      rerunAfterInFlight: false
+    });
+  });
+
   test('decideRangeRefresh waits for an in-flight refresh of the same preset without scheduling another run', () => {
     const decision = decideRangeRefresh({
       requestedPreset: 'last7Days',
@@ -376,6 +439,31 @@ suite('Extension Test Suite', () => {
       useCached: false,
       waitForInFlight: true,
       rerunAfterInFlight: true
+    });
+  });
+
+  test('createGeneratedAt returns an ISO string and matching epoch milliseconds', () => {
+    const now = new Date('2026-04-08T08:45:00.000Z');
+
+    assert.deepStrictEqual(createGeneratedAt(now), {
+      generatedAt: '2026-04-08T08:45:00.000Z',
+      generatedAtMs: now.getTime()
+    });
+  });
+
+  test('createTodayAnalysisSources exposes filesystem and git origins explicitly', () => {
+    assert.deepStrictEqual(createTodayAnalysisSources(true), {
+      touchedFiles: 'filesystem-mtime',
+      newFiles: 'filesystem-birthtime',
+      deletedFiles: 'git-log',
+      lineDeltas: 'git-log'
+    });
+
+    assert.deepStrictEqual(createTodayAnalysisSources(false), {
+      touchedFiles: 'filesystem-mtime',
+      newFiles: 'filesystem-birthtime',
+      deletedFiles: 'unavailable',
+      lineDeltas: 'unavailable'
     });
   });
 
@@ -755,7 +843,13 @@ suite('Extension Test Suite', () => {
             skippedUnreadableFiles: 0,
             scopeSummary: '全工作区',
             gitAvailable: true,
-            gitSince: '2026-03-27 ~ 2026-04-02'
+            gitSince: '2026-03-27 ~ 2026-04-02',
+            sources: {
+              touchedFiles: 'filesystem-mtime',
+              newFiles: 'filesystem-birthtime',
+              deletedFiles: 'git-log',
+              lineDeltas: 'git-log'
+            }
           }
         }
       },
@@ -769,6 +863,132 @@ suite('Extension Test Suite', () => {
     assert.ok(html.includes('看板脚本未成功加载'));
     assert.ok(html.includes('最近 7 天'));
     assert.ok(html.includes('8'));
+    assert.ok(html.includes('文件活动来源'));
+    assert.ok(html.includes('文件系统时间'));
+    assert.ok(html.includes('Git 提交'));
     assert.ok(!html.includes('src="vscode-webview://dashboard.js"'));
+  });
+
+  test('dashboard shell fallback explains multi-root git limitations explicitly', () => {
+    const html = getDashboardHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {
+        todayStats: {
+          workspaceName: 'Multi-root Workspace',
+          generatedAt: new Date(2026, 3, 2, 10, 0, 0).toISOString(),
+          generatedAtMs: new Date(2026, 3, 2, 10, 0, 0).getTime(),
+          rangePreset: 'today',
+          rangeLabel: '今天',
+          totals: {
+            touchedFiles: 2,
+            newFiles: 1,
+            deletedFiles: 0,
+            lines: 20,
+            codeLines: 12,
+            commentLines: 5,
+            blankLines: 3,
+            bytes: 200,
+            todoCount: 1,
+            addedLines: 0,
+            deletedLines: 0,
+            changedLines: 0
+          },
+          languages: [],
+          touchedFiles: [],
+          newFiles: [],
+          deletedFiles: [],
+          todoLocations: [],
+          insights: {
+            topLanguage: 'typescript',
+            topLanguageShare: 1,
+            topPath: 'client/src/a.ts',
+            todoTouchedCount: 1
+          },
+          analysisMeta: {
+            durationMs: 50,
+            matchedFiles: 10,
+            analyzedFiles: 2,
+            skippedBinaryFiles: 0,
+            skippedUnreadableFiles: 0,
+            scopeSummary: '全工作区',
+            gitAvailable: false,
+            gitUnavailableReason: 'multi-root-workspace',
+            sources: {
+              touchedFiles: 'filesystem-mtime',
+              newFiles: 'filesystem-birthtime',
+              deletedFiles: 'unavailable',
+              lineDeltas: 'unavailable'
+            }
+          }
+        },
+        projectStats: {
+          workspaceName: 'Multi-root Workspace',
+          generatedAt: new Date(2026, 3, 2, 10, 0, 0).toISOString(),
+          generatedAtMs: new Date(2026, 3, 2, 10, 0, 0).getTime(),
+          totals: { files: 20, lines: 40, codeLines: 25, commentLines: 8, blankLines: 7, bytes: 400 },
+          languages: [],
+          directories: [],
+          directoryTree: [],
+          largestFiles: [],
+          files: [],
+          todoSummary: [],
+          todoHotspots: [],
+          todoLocations: [],
+          insights: {
+            averageLinesPerFile: 2,
+            averageCodeLinesPerFile: 1,
+            commentRatio: 0.5,
+            topLanguage: 'typescript',
+            topLanguageShare: 1,
+            topDirectory: 'client',
+            totalTodoCount: 0,
+            todoDensity: 0
+          },
+          analysisMeta: {
+            durationMs: 80,
+            matchedFiles: 20,
+            analyzedFiles: 20,
+            skippedBinaryFiles: 0,
+            skippedUnreadableFiles: 0,
+            scopeSummary: '全工作区'
+          },
+          git: {
+            available: false,
+            unavailableReason: 'multi-root-workspace',
+            rangeLabel: '最近 12 周',
+            totalCommits: 0,
+            weeklyCommits: [],
+            topAuthors: []
+          }
+        }
+      },
+      {
+        compact: false,
+        title: 'Code Info',
+        subtitle: 'demo'
+      }
+    );
+
+    assert.ok(html.includes('多根工作区'));
+    assert.ok(html.includes('Git 趋势'));
+  });
+
+  test('dashboard runtime includes explicit multi-root git fallback copy', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('多根工作区暂不支持 Git 提交趋势'));
+  });
+
+  test('dashboard runtime guards against a missing app container before writing innerHTML', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes("showError('Code Info dashboard root container is missing.')"));
+    assert.ok(runtime.includes('if (!app) {'));
   });
 });

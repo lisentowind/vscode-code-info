@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { DashboardData, PresentationMode } from '../types';
+import type { AnalysisMeta, DashboardData, GitStats, PresentationMode } from '../types';
 import { buildDashboardShellHtml } from './dashboardShell';
 
 export function getEmptyStateHtml(
@@ -301,6 +301,8 @@ function getDashboardFallbackHtml(data: DashboardData, presentation: Presentatio
   const workspaceName = projectStats?.workspaceName ?? todayStats?.workspaceName ?? presentation.subtitle ?? '当前工作区';
   const rangeLabel = todayStats?.rangeLabel ?? '今天';
   const updatedAt = todayStats?.generatedAt ?? projectStats?.generatedAt;
+  const rangeSourceSummary = todayStats ? describeTodayRangeSources(todayStats.analysisMeta) : undefined;
+  const gitSummary = projectStats ? describeProjectGitStatus(projectStats.git) : undefined;
   const summaryItems = [];
 
   if (todayStats) {
@@ -338,13 +340,50 @@ function getDashboardFallbackHtml(data: DashboardData, presentation: Presentatio
       <div class="section-title"><h2>看板脚本未成功加载</h2></div>
       <div class="section-note">当前先展示静态摘要，建议关闭后重新打开面板，或执行“Developer: Reload Window”重试。</div>
       <div class="todo-summary">
-        <div class="todo-item"><span>工作区</span><span class="muted">${escapeHtml(workspaceName)}</span></div>
-        <div class="todo-item"><span>范围</span><span class="muted">${escapeHtml(rangeLabel)}</span></div>
-        <div class="todo-item"><span>更新时间</span><span class="muted">${escapeHtml(updatedAt ?? '未知')}</span></div>
-      </div>
-    </section>
+      <div class="todo-item"><span>工作区</span><span class="muted">${escapeHtml(workspaceName)}</span></div>
+      <div class="todo-item"><span>范围</span><span class="muted">${escapeHtml(rangeLabel)}</span></div>
+      <div class="todo-item"><span>更新时间</span><span class="muted">${escapeHtml(updatedAt ?? '未知')}</span></div>
+      ${rangeSourceSummary ? `<div class="todo-item"><span>文件活动来源</span><span class="muted">${escapeHtml(rangeSourceSummary)}</span></div>` : ''}
+      ${gitSummary ? `<div class="todo-item"><span>Git 趋势</span><span class="muted">${escapeHtml(gitSummary)}</span></div>` : ''}
+    </div>
+  </section>
     ${summaryHtml}
   </main>`;
+}
+
+function describeTodayRangeSources(todayAnalysisMeta: AnalysisMeta | undefined): string {
+  const sources = todayAnalysisMeta?.sources;
+  const fileSource =
+    sources?.touchedFiles === 'filesystem-mtime' || sources?.newFiles === 'filesystem-birthtime'
+      ? '文件系统时间'
+      : '工作区扫描';
+  const changeSource = describeGitAvailabilityLabel(
+    todayAnalysisMeta?.gitUnavailableReason,
+    sources?.deletedFiles === 'git-log' || sources?.lineDeltas === 'git-log'
+  );
+  return `${fileSource}；删除与增删行来源：${changeSource}`;
+}
+
+function describeProjectGitStatus(git: GitStats | undefined): string | undefined {
+  if (!git) {
+    return undefined;
+  }
+
+  if (git.available) {
+    return `${git.rangeLabel} 可用`;
+  }
+
+  return describeGitAvailabilityLabel(git.unavailableReason, false);
+}
+
+function describeGitAvailabilityLabel(reason: AnalysisMeta['gitUnavailableReason'], available: boolean): string {
+  if (available) {
+    return 'Git 提交';
+  }
+  if (reason === 'multi-root-workspace') {
+    return '多根工作区暂不支持';
+  }
+  return '不可用';
 }
 
 function renderFallbackMetric(label: string, value: string): string {

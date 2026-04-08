@@ -1,5 +1,5 @@
 import { GIT_WEEKS } from '../constants';
-import type { GitAuthor, GitStats } from '../types';
+import type { GitAuthor, GitStats, GitUnavailableReason } from '../types';
 import { buildWeeklyBuckets, getWeekBucketKey, isGitRepository, runGit } from './common';
 
 export async function analyzeGitHistory(rootPath: string): Promise<GitStats> {
@@ -7,7 +7,7 @@ export async function analyzeGitHistory(rootPath: string): Promise<GitStats> {
 
   try {
     if (!(await isGitRepository(rootPath))) {
-      throw new Error('Not a git repository');
+      return createUnavailableGitStats('not-git-repository');
     }
     const logOutput = await runGit(
       ['log', '--date=short', '--pretty=format:%ad%x09%an', `--since=${GIT_WEEKS * 7}.days`],
@@ -55,12 +55,17 @@ export async function analyzeGitHistory(rootPath: string): Promise<GitStats> {
         .slice(0, 5)
     };
   } catch {
-    return {
-      available: false,
-      rangeLabel: `最近 ${GIT_WEEKS} 周`,
-      totalCommits: 0,
-      weeklyCommits: [...emptyWeeks.values()],
-      topAuthors: []
-    };
+    return createUnavailableGitStats('git-error');
   }
+}
+
+export function createUnavailableGitStats(reason: GitUnavailableReason): GitStats {
+  return {
+    available: false,
+    unavailableReason: reason,
+    rangeLabel: `最近 ${GIT_WEEKS} 周`,
+    totalCommits: 0,
+    weeklyCommits: [...buildWeeklyBuckets(GIT_WEEKS).values()],
+    topAuthors: []
+  };
 }

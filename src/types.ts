@@ -89,10 +89,24 @@ export type GitAuthor = {
 
 export type GitStats = {
   available: boolean;
+  unavailableReason?: GitUnavailableReason;
   rangeLabel: string;
   totalCommits: number;
   weeklyCommits: GitWeek[];
   topAuthors: GitAuthor[];
+};
+
+export type GitUnavailableReason =
+  | 'multi-root-workspace'
+  | 'no-workspace-folder'
+  | 'not-git-repository'
+  | 'git-error';
+
+export type TodayAnalysisSources = {
+  touchedFiles: 'filesystem-mtime';
+  newFiles: 'filesystem-birthtime';
+  deletedFiles: 'git-log' | 'unavailable';
+  lineDeltas: 'git-log' | 'unavailable';
 };
 
 export type WorkspaceTotals = {
@@ -107,6 +121,7 @@ export type WorkspaceTotals = {
 export type WorkspaceStats = {
   workspaceName: string;
   generatedAt: string;
+  generatedAtMs?: number;
   totals: WorkspaceTotals;
   languages: LanguageSummary[];
   directories: DirectorySummary[];
@@ -156,6 +171,7 @@ export type TodayInsights = {
 export type TodayStats = {
   workspaceName: string;
   generatedAt: string;
+  generatedAtMs?: number;
   rangePreset: 'today' | 'last7Days' | 'last30Days';
   rangeLabel: string;
   totals: TodayTotals;
@@ -192,7 +208,9 @@ export type AnalysisMeta = {
   skippedUnreadableFiles: number;
   scopeSummary: string;
   gitAvailable?: boolean;
+  gitUnavailableReason?: GitUnavailableReason;
   gitSince?: string;
+  sources?: TodayAnalysisSources;
 };
 
 export type PresentationMode = {

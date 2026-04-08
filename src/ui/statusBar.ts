@@ -65,7 +65,9 @@ function createTooltip(todayStats: TodayStats | undefined): vscode.MarkdownStrin
   const updatedAt = formatTime(todayStats.generatedAt);
   const gitLine = todayStats.analysisMeta.gitAvailable
     ? `Git（${escapeMarkdown(todayStats.analysisMeta.gitSince || rangeLabel)} 起）：+${todayStats.totals.addedLines} / -${todayStats.totals.deletedLines} 行，删除 ${todayStats.totals.deletedFiles} 文件`
-    : 'Git：不可用（无法统计删行/删文件）';
+    : todayStats.analysisMeta.gitUnavailableReason === 'multi-root-workspace'
+      ? 'Git：多根工作区暂不支持范围删行/删文件统计'
+      : 'Git：不可用（无法统计删行/删文件）';
 
   tooltip.appendMarkdown(
     [

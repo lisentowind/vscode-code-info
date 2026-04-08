@@ -2,6 +2,7 @@ import type { AnalysisDateRangePreset } from '../analysis/dateRange';
 
 type CachedRangeStats = {
   generatedAt: string;
+  generatedAtMs?: number;
   rangePreset: AnalysisDateRangePreset;
 };
 
@@ -34,7 +35,7 @@ export function decideRangeRefresh(input: {
   const shouldReuseCached =
     !input.force &&
     input.latestStats?.rangePreset === preset &&
-    isFresh(input.latestStats.generatedAt, input.maxAgeMs, input.now);
+    isFresh(input.latestStats.generatedAt, input.latestStats.generatedAtMs, input.maxAgeMs, input.now);
 
   return {
     preset,
@@ -44,8 +45,11 @@ export function decideRangeRefresh(input: {
   };
 }
 
-function isFresh(generatedAt: string, maxAgeMs: number, now = Date.now()): boolean {
-  const generatedAtTimestamp = new Date(generatedAt).getTime();
+function isFresh(generatedAt: string, generatedAtMs: number | undefined, maxAgeMs: number, now = Date.now()): boolean {
+  const generatedAtTimestamp =
+    typeof generatedAtMs === 'number' && Number.isFinite(generatedAtMs)
+      ? generatedAtMs
+      : new Date(generatedAt).getTime();
   if (!Number.isFinite(generatedAtTimestamp)) {
     return false;
   }

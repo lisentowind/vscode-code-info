@@ -23,6 +23,7 @@ import {
   reduceComparePanelState,
   resetComparePanel
 } from '../ui/comparePanel';
+import { getSingleRootPathOrError } from '../workspace/rootSupport';
 import { getCompareHtml } from '../webview/compareTemplates';
 import type { CompareDiffRow, CompareFileSnapshot, CompareHotspot, CompareRequest } from '../types';
 
@@ -407,6 +408,20 @@ suite('Compare Primitives Test Suite', () => {
     }
   });
 
+  test('getSingleRootPathOrError rejects compare root resolution for multi-root workspaces', () => {
+    assert.throws(
+      () =>
+        getSingleRootPathOrError(
+          [
+            { name: 'client', uri: vscode.Uri.file('/tmp/client') },
+            { name: 'server', uri: vscode.Uri.file('/tmp/server') }
+          ] as never,
+          '变更对比'
+        ),
+      /暂不支持多根工作区/
+    );
+  });
+
   test('createInitialComparePanelState starts in branch mode', () => {
     const state = createInitialComparePanelState();
 
@@ -603,6 +618,19 @@ suite('Compare Primitives Test Suite', () => {
 
     assert.ok(loadingHtml.includes('正在计算这次对比'));
     assert.ok(errorHtml.includes('invalid sha'));
+  });
+
+  test('getCompareHtml renders explicit unsupported guidance for multi-root workspaces', () => {
+    const html = getCompareHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      reduceComparePanelState(createInitialComparePanelState(), {
+        type: 'run:error',
+        error: 'Code Info 变更对比暂不支持多根工作区，请切换到单根工作区后再使用。'
+      })
+    );
+
+    assert.ok(html.includes('多根工作区'));
+    assert.ok(html.includes('单根工作区'));
   });
 
   test('getCompareHtml injects gsap runtime when provided', () => {

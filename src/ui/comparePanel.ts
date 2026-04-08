@@ -4,6 +4,7 @@ import { getCurrentBranchName, listLocalBranches, resolveDefaultCompareBase } fr
 import type { CompareOpenTarget, CompareRequest, CompareStats } from '../types';
 import { openCompareTarget } from './resourceNavigator';
 import { getCompareHtml } from '../webview/compareTemplates';
+import { getSingleRootPathOrError } from '../workspace/rootSupport';
 
 export type ComparePanelRunStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -183,11 +184,7 @@ async function resolveFallbackBaseRef(rootPath: string, branchOptions: string[],
 }
 
 function getWorkspaceRootPath(): string {
-  const rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!rootPath) {
-    throw new Error('No workspace folder found.');
-  }
-  return rootPath;
+  return getSingleRootPathOrError(vscode.workspace.workspaceFolders, '变更对比');
 }
 
 function ensureComparePanel(

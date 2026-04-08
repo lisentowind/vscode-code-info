@@ -10,6 +10,7 @@ import {
 import type { CompareRequest, CompareStats, Logger } from '../types';
 import { analyzeCompareSnapshots } from './compareSnapshots';
 import { buildCompareSummaries } from './compareSummaries';
+import { getSingleRootPathOrError } from '../workspace/rootSupport';
 
 export async function analyzeCompare(
   request: CompareRequest,
@@ -23,7 +24,7 @@ export async function analyzeCompare(
     throw new Error('No workspace folder found.');
   }
 
-  const rootPath = options?.rootPath ?? folders?.[0]?.uri.fsPath;
+  const rootPath = options?.rootPath ?? getSingleRootPathOrError(folders, '变更对比');
   if (!rootPath) {
     throw new Error('No workspace folder found.');
   }

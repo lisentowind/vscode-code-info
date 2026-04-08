@@ -31,10 +31,14 @@ let app = document.getElementById('app');
 if (!app) {
   app = document.createElement('div');
   app.id = 'app';
-  document.body.appendChild(app);
+  document.body?.appendChild(app);
 }
-app.className = 'shell shell-dashboard';
-document.body.classList.add('dashboard-shell');
+if (!app) {
+  showError('Code Info dashboard root container is missing.');
+} else {
+  app.className = 'shell shell-dashboard';
+}
+document.body?.classList.add('dashboard-shell');
 
 function escapeHtml(value) {
   return String(value)
@@ -54,6 +58,55 @@ function percent(value, total) { return !total ? '0%' : ((value / total) * 100).
 function ratio(value) { return percent(value, 1); }
 function durationFormat(value) { return value < 1000 ? value + ' ms' : (value / 1000).toFixed(2) + ' s'; }
 function densityFormat(value) { return value === 0 ? '0 / KLOC' : (value * 1000).toFixed(1) + ' / KLOC'; }
+function resolveTodaySources(todayAnalysisMeta) {
+  if (todayAnalysisMeta?.sources) {
+    return todayAnalysisMeta.sources;
+  }
+  const gitBacked = Boolean(todayAnalysisMeta?.gitAvailable);
+  return {
+    touchedFiles: 'filesystem-mtime',
+    newFiles: 'filesystem-birthtime',
+    deletedFiles: gitBacked ? 'git-log' : 'unavailable',
+    lineDeltas: gitBacked ? 'git-log' : 'unavailable'
+  };
+}
+function describeGitAvailability(reason, available) {
+  if (available) {
+    return 'Git 提交';
+  }
+  if (reason === 'multi-root-workspace') {
+    return '多根工作区暂不支持';
+  }
+  return '不可用';
+}
+function describeTodaySourceSummary(todayAnalysisMeta) {
+  const sources = resolveTodaySources(todayAnalysisMeta);
+  const fileSource =
+    sources.touchedFiles === 'filesystem-mtime' || sources.newFiles === 'filesystem-birthtime'
+      ? '文件系统时间'
+      : '工作区扫描';
+  const changeSource = describeGitAvailability(
+    todayAnalysisMeta?.gitUnavailableReason,
+    sources.deletedFiles === 'git-log' || sources.lineDeltas === 'git-log'
+  );
+  return '文件活动来源：' + fileSource + '；删除与增删行来源：' + changeSource;
+}
+function describeTodayDeletedFilesNote(todayAnalysisMeta) {
+  if (todayAnalysisMeta?.gitUnavailableReason === 'multi-root-workspace') {
+    return '多根工作区暂不支持范围内的 Git 删文件统计，请切换到单根工作区后再使用。';
+  }
+  const sources = resolveTodaySources(todayAnalysisMeta);
+  if (sources.deletedFiles === 'git-log') {
+    return '基于当前时间范围内的 Git 提交，仅展示文件路径。';
+  }
+  return '当前工作区没有可用的 Git 数据，无法统计删除文件。';
+}
+function describeProjectGitNote(stats) {
+  if (stats.git.unavailableReason === 'multi-root-workspace') {
+    return '多根工作区暂不支持 Git 提交趋势，请切换到单根工作区后再使用。';
+  }
+  return '当前工作区没有可读取的 Git 历史，或 Git 命令不可用。';
+}
 function icon(name, className) {
   const attrs = className ? ' class="' + className + '"' : '';
   const icons = {
@@ -159,7 +212,7 @@ function renderComposition(stats) {
   return '<div class="stack">' + stack + '</div><div class="legend">' + legend + '</div>';
 }
 function renderGitStats(stats) {
-  if (!stats.git.available) return '<div class="git-note">当前工作区没有可读取的 Git 历史，或 Git 命令不可用。</div>';
+  if (!stats.git.available) return '<div class="git-note">' + escapeHtml(describeProjectGitNote(stats)) + '</div>';
   const maxCommits = Math.max(...stats.git.weeklyCommits.map((item) => item.commits), 1);
   const bars = stats.git.weeklyCommits.map((item, index) => {
     const width = item.commits === 0 ? 2 : (item.commits / maxCommits) * 100;
@@ -795,7 +848,7 @@ let html = '' +
 
 if (todayStats) {
   html += '' +
-    '<section class="section-intro" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>' + escapeHtml(rangeHeading) + '统计分析</h2></div><div class="section-note section-note-tight">新增/修改基于文件时间戳；删除文件与增删行基于当前时间范围内的 Git 提交。</div></section>' +
+    '<section class="section-intro" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>' + escapeHtml(rangeHeading) + '统计分析</h2></div><div class="section-note section-note-tight">' + escapeHtml(describeTodaySourceSummary(todayStats.analysisMeta)) + '</div></section>' +
     '<section class="cards">' +
       metricCard(rangeHeading + '变更文件', numberFormat(todayStats.totals.touchedFiles), '当前范围内被修改或新增的文本文件', 'files') +
       metricCard(rangeHeading + '新增文件', numberFormat(todayStats.totals.newFiles), '通过文件创建时间判断的新文件', 'newFile') +
@@ -819,7 +872,7 @@ if (todayStats) {
     '<section class="panel"><div class="section-title">' + icon('newFile') + '<h2>' + escapeHtml(rangeHeading) + '新增文件</h2></div><div class="section-note">当前范围内首次创建的文件。</div>' + renderTodayFiles(todayStats.newFiles, '当前范围内还没有检测到新增文件。') + '</section>' +
     '<section class="panel"><div class="section-title">' + icon('files') + '<h2>' + escapeHtml(rangeHeading) + '变更文件</h2></div><div class="section-note">当前范围内新增或修改过的文件清单，点击文件名可直接打开源码。</div>' + renderTodayFiles(todayStats.touchedFiles, '当前范围内还没有检测到新增或修改过的文件。') + '</section>' +
     (todayStats.totals.todoCount > 0 ? ('<section class="panel"><div class="section-title">' + icon('todo') + '<h2>' + escapeHtml(rangeHeading) + '待办清单</h2></div><div class="section-note">展示部分 TODO / FIXME / HACK 位置，点击可跳转到对应行。</div>' + renderTodoLocations(todayStats.todoLocations, '当前范围变更文件中未发现待办标记。') + '</section>') : '') +
-    '<section class="panel"><div class="section-title">' + icon('deletedFile') + '<h2>' + escapeHtml(rangeHeading) + '删除文件</h2></div><div class="section-note">' + (todayStats.analysisMeta.gitAvailable ? '基于当前时间范围内的 Git 提交，仅展示文件路径。' : '当前工作区没有可用的 Git 数据，无法统计删除文件。') + '</div>' + renderDeletedFiles(todayStats.deletedFiles, '当前范围内还没有检测到删除文件。') + '</section>';
+    '<section class="panel"><div class="section-title">' + icon('deletedFile') + '<h2>' + escapeHtml(rangeHeading) + '删除文件</h2></div><div class="section-note">' + escapeHtml(describeTodayDeletedFilesNote(todayStats.analysisMeta)) + '</div>' + renderDeletedFiles(todayStats.deletedFiles, '当前范围内还没有检测到删除文件。') + '</section>';
 } else {
   html += '<section class="section-intro" id="ci-section-today"><div class="section-title">' + icon('today') + '<h2>范围统计分析</h2></div><div class="section-note section-note-tight">当前还没有范围统计数据。切到插件时会自动刷新，也可以手动点击“刷新今天”。</div></section>';
 }
@@ -846,7 +899,7 @@ if (!presentation.compact && projectStats) {
       '<div class="panel"><div class="section-title">' + icon('todo') + '<h2>待办摘要</h2></div><div class="section-note">仅统计注释中的 TODO / FIXME / HACK 标记。</div>' + renderTodoSummary(projectStats.todoSummary) + '</div>' +
     '</section>' +
     '<section class="panel" id="ci-section-tree"><div class="section-title">' + icon('tree') + '<h2>模块目录树</h2></div><div class="section-note">支持逐层展开到最深目录，并展示当前目录下的文件（点击文件名可打开）。</div>' + renderTreeNodes(projectStats.directoryTree, 0) + '</section>' +
-    '<section class="panel" id="ci-section-git"><div class="section-title">' + icon('git') + '<h2>Git 提交趋势</h2></div><div class="section-note">基于当前工作区首个目录的 Git 历史。</div>' + renderGitStats(projectStats) + '</section>' +
+    '<section class="panel" id="ci-section-git"><div class="section-title">' + icon('git') + '<h2>Git 提交趋势</h2></div><div class="section-note">单根工作区下展示当前仓库的近期提交趋势与贡献者分布。</div>' + renderGitStats(projectStats) + '</section>' +
     '<section class="panel" id="ci-section-todo"><div class="section-title">' + icon('todo') + '<h2>待办热点文件</h2></div><div class="section-note">点击文件名可直接打开源码定位待办。</div>' + renderTodoHotspots(projectStats.todoHotspots) + '</section>' +
     (projectStats.insights.totalTodoCount > 0 ? ('<section class="panel"><div class="section-title">' + icon('todo') + '<h2>待办位置清单</h2></div><div class="section-note">展示部分 TODO / FIXME / HACK 位置，点击可跳转到对应行。</div>' + renderTodoLocations(projectStats.todoLocations, '未发现待办标记。') + '</section>') : '') +
     '<section class="panel" id="ci-section-tables"><div class="section-title">' + icon('language') + '<h2>语言统计明细</h2></div><div class="table-wrap"><table><thead><tr><th>语言</th><th>文件数</th><th>代码行</th><th>体积</th><th>待办数</th></tr></thead><tbody>' + renderLanguageTable(projectStats.languages) + '</tbody></table></div></section>' +
@@ -1124,7 +1177,11 @@ function initAnimations() {
   });
   vscode.setState({ ...motionState, dashboardIntroPlayed: true });
 }
-app.innerHTML = shellAtmosphereHtml + '<div class="sticky-sentinel" aria-hidden="true"></div>' + html;
+if (!app) {
+  showError('Code Info dashboard root container is missing.');
+} else {
+  app.innerHTML = shellAtmosphereHtml + '<div class="sticky-sentinel" aria-hidden="true"></div>' + html;
+}
 const topbar = document.querySelector('.topbar');
 const sentinel = document.querySelector('.sticky-sentinel');
 if (topbar && sentinel && typeof IntersectionObserver !== 'undefined') {
