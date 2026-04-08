@@ -33,7 +33,8 @@ if (!app) {
   app.id = 'app';
   document.body.appendChild(app);
 }
-app.className = 'shell';
+app.className = 'shell shell-dashboard';
+document.body.classList.add('dashboard-shell');
 
 function escapeHtml(value) {
   return String(value)
@@ -128,14 +129,22 @@ function locationButton(label, resource, line, character, title) {
   const resolvedTitle = title || label;
   return '<button class="link-button" title="' + escapeHtml(resolvedTitle) + '" data-command="openLocation" data-resource="' + escapeHtml(resource) + '" data-line="' + escapeHtml(line) + '" data-character="' + escapeHtml(character) + '">' + escapeHtml(label) + '</button>';
 }
-function renderBarList(items, labelKey, valueKey, formatter, emptyText) {
+function renderDataLinkAttrs(group, key, index) {
+  if (!group || key === undefined || key === null || index === undefined || index === null) {
+    return '';
+  }
+  return ' data-link-group="' + escapeHtml(group) + '" data-link-key="' + escapeHtml(String(key)) + '" data-link-index="' + escapeHtml(String(index)) + '"';
+}
+function renderBarList(items, labelKey, valueKey, formatter, emptyText, options) {
   if (!items || !items.length) return '<div class="empty-note">' + escapeHtml(emptyText) + '</div>';
   const max = items[0]?.[valueKey] ?? 1;
-  return items.map((item) => {
+  return items.map((item, index) => {
     const value = item[valueKey];
     const label = item[labelKey];
     const width = Math.max((value / Math.max(max, 1)) * 100, value > 0 ? 3 : 0);
-    return '<div class="bar-row"><div class="bar-head"><span title="' + escapeHtml(label) + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;">' + escapeHtml(label) + '</span><span class="muted">' + formatter(value, item) + '</span></div><div class="bar-track"><div class="bar-fill" style="width:' + width + '%"></div></div></div>';
+    const linkKey = options?.keyGetter ? options.keyGetter(item) : label;
+    const linkAttrs = renderDataLinkAttrs(options?.linkGroup, linkKey, index);
+    return '<div class="bar-row"' + linkAttrs + '><div class="bar-head"><span title="' + escapeHtml(label) + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;">' + escapeHtml(label) + '</span><span class="muted">' + formatter(value, item) + '</span></div><div class="bar-track"><div class="bar-fill" style="width:' + width + '%"></div></div></div>';
   }).join('');
 }
 function renderComposition(stats) {
@@ -152,9 +161,9 @@ function renderComposition(stats) {
 function renderGitStats(stats) {
   if (!stats.git.available) return '<div class="git-note">当前工作区没有可读取的 Git 历史，或 Git 命令不可用。</div>';
   const maxCommits = Math.max(...stats.git.weeklyCommits.map((item) => item.commits), 1);
-  const bars = stats.git.weeklyCommits.map((item) => {
+  const bars = stats.git.weeklyCommits.map((item, index) => {
     const width = item.commits === 0 ? 2 : (item.commits / maxCommits) * 100;
-    return '<div class="git-block"><div class="bar-head"><span>' + escapeHtml(item.label) + '</span><span class="muted">' + numberFormat(item.commits) + ' commits</span></div><div class="mini-track"><div class="mini-fill" style="width:' + width + '%"></div></div></div>';
+    return '<div class="git-block"' + renderDataLinkAttrs('git-weekly', item.label, index) + '><div class="bar-head"><span>' + escapeHtml(item.label) + '</span><span class="muted">' + numberFormat(item.commits) + ' commits</span></div><div class="mini-track"><div class="mini-fill" style="width:' + width + '%"></div></div></div>';
   }).join('');
   const authors = stats.git.topAuthors.length
     ? stats.git.topAuthors.map((item, index) => '<div class="author-item"><div class="author-left"><span class="dot" style="background:' + palette[index % palette.length] + '"></span><span>' + escapeHtml(item.name) + '</span></div><span class="muted">' + numberFormat(item.commits) + ' 次</span></div>').join('')
@@ -175,7 +184,7 @@ function renderDeletedFiles(files, emptyText) {
   '</tbody></table></div>';
 }
 function renderLanguageTable(items) {
-  return items.slice(0, presentation.compact ? 8 : 12).map((language, index) => '<tr><td><span class="dot" style="background:' + palette[index % palette.length] + '"></span> ' + escapeHtml(language.language) + '</td><td>' + numberFormat(language.files) + '</td><td>' + numberFormat(language.codeLines) + '</td><td>' + bytesFormat(language.bytes) + '</td><td>' + numberFormat(language.todoCount) + '</td></tr>').join('');
+  return items.slice(0, presentation.compact ? 8 : 12).map((language, index) => '<tr' + renderDataLinkAttrs('project-language', language.language, index) + '><td><span class="dot" style="background:' + palette[index % palette.length] + '"></span> ' + escapeHtml(language.language) + '</td><td>' + numberFormat(language.files) + '</td><td>' + numberFormat(language.codeLines) + '</td><td>' + bytesFormat(language.bytes) + '</td><td>' + numberFormat(language.todoCount) + '</td></tr>').join('');
 }
 function renderLargestFiles(items) {
   return items.slice(0, presentation.compact ? 5 : 10).map((file) => '<tr><td class="mono"><div class="file-entry">' + fileTypeIcon(file.language, file.path) + fileButton(file.path, file.resource) + '</div></td><td>' + escapeHtml(file.language) + '</td><td>' + numberFormat(file.lines) + '</td><td>' + numberFormat(file.codeLines) + '</td><td>' + numberFormat(file.todoCounts.total) + '</td></tr>').join('');
@@ -273,13 +282,115 @@ function initCharts() {
 
   const charts = [];
   const resizeTargets = [];
+  const activeLinkedGroups = new Map();
 
-  function initChart(element, option) {
+  function bindChartHoverState(chart, element) {
+    const panel = element.closest('.panel');
+    if (!(panel instanceof HTMLElement)) return;
+
+    const activate = () => {
+      panel.classList.add('chart-spotlight');
+      element.classList.add('chart-hover-active');
+    };
+    const deactivate = () => {
+      panel.classList.remove('chart-spotlight');
+      element.classList.remove('chart-hover-active');
+    };
+
+    element.addEventListener('pointerenter', activate);
+    element.addEventListener('pointerleave', deactivate);
+    chart.on('mouseover', activate);
+    chart.on('mouseout', deactivate);
+    chart.on('click', () => highlightSectionFocus(panel));
+    chart.getZr?.().on?.('globalout', deactivate);
+  }
+
+  function clearLinkedState(group) {
+    if (!group) return;
+    const active = activeLinkedGroups.get(group);
+    if (active?.key !== undefined) {
+      document.querySelectorAll('[data-link-group="' + group + '"].is-linked').forEach((node) => {
+        node.classList.remove('is-linked');
+      });
+    }
+    activeLinkedGroups.delete(group);
+  }
+
+  function setLinkedState(group, key) {
+    if (!group || key === undefined || key === null) return;
+    const normalizedKey = String(key);
+    const active = activeLinkedGroups.get(group);
+    if (active?.key === normalizedKey) return;
+    clearLinkedState(group);
+    document.querySelectorAll('[data-link-group="' + group + '"]').forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      if ((node.dataset.linkKey || '') === normalizedKey) {
+        node.classList.add('is-linked');
+      }
+    });
+    activeLinkedGroups.set(group, { key: normalizedKey });
+  }
+
+  function bindChartListSync(chart, element, linkOptions) {
+    if (!linkOptions?.group || typeof linkOptions.getKeyByIndex !== 'function') return;
+    const group = linkOptions.group;
+    const nodes = Array.from(document.querySelectorAll('[data-link-group="' + group + '"]'));
+
+    const activate = (index) => {
+      const key = linkOptions.getKeyByIndex(index);
+      if (key === undefined || key === null) return;
+      setLinkedState(group, key);
+    };
+    const deactivate = () => clearLinkedState(group);
+
+    chart.on('mouseover', (params) => {
+      if (!params || typeof params.dataIndex !== 'number') return;
+      activate(params.dataIndex);
+    });
+    chart.on('mouseout', deactivate);
+    chart.getZr?.().on?.('globalout', deactivate);
+
+    nodes.forEach((node) => {
+      if (!(node instanceof HTMLElement) || node.dataset.chartSyncBound === 'true') return;
+      node.dataset.chartSyncBound = 'true';
+      const dataIndex = Number.parseInt(node.dataset.linkIndex || '', 10);
+      node.addEventListener('pointerenter', () => {
+        if (!Number.isFinite(dataIndex)) return;
+        activate(dataIndex);
+        chart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex });
+        chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex });
+      });
+      node.addEventListener('pointerleave', () => {
+        if (Number.isFinite(dataIndex)) {
+          chart.dispatchAction({ type: 'downplay', seriesIndex: 0, dataIndex });
+          chart.dispatchAction({ type: 'hideTip' });
+        }
+        deactivate();
+      });
+    });
+
+    element.addEventListener('pointerleave', deactivate);
+  }
+
+  function initChart(element, option, linkOptions) {
     const chart = echarts.init(element, null, { renderer: 'canvas' });
     chart.setOption(option, { notMerge: true, lazyUpdate: true });
     charts.push(chart);
     resizeTargets.push(element);
-    element.closest('.panel')?.classList.add('chart-ready');
+    const panel = element.closest('.panel');
+    panel?.classList.add('chart-ready');
+    bindChartHoverState(chart, element);
+    bindChartListSync(chart, element, linkOptions);
+    if (panel && typeof gsap !== 'undefined' && !prefersReducedMotion) {
+      gsap.fromTo(element, { autoAlpha: 0, y: 10, scale: 0.985 }, {
+        autoAlpha: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.46,
+        ease: 'power2.out',
+        overwrite: true
+      });
+    }
   }
 
   function truncateLabel(value, max) {
@@ -337,6 +448,9 @@ function initCharts() {
           itemStyle: { color: palette[0], borderRadius: [0, 7, 7, 0] }
         }
       ]
+    }, {
+      group: 'project-language',
+      getKeyByIndex: (index) => items[index]?.language
     });
   }
 
@@ -374,6 +488,9 @@ function initCharts() {
           itemStyle: { color: palette[5], borderRadius: [0, 7, 7, 0] }
         }
       ]
+    }, {
+      group: 'today-language',
+      getKeyByIndex: (index) => items[index]?.language
     });
   }
 
@@ -419,6 +536,9 @@ function initCharts() {
           itemStyle: { color: palette[3], borderRadius: [0, 7, 7, 0] }
         }
       ]
+    }, {
+      group: 'project-module',
+      getKeyByIndex: (index) => items[index]?.path
     });
   }
 
@@ -461,6 +581,9 @@ function initCharts() {
           areaStyle: { color: accentSoft }
         }
       ]
+    }, {
+      group: 'git-weekly',
+      getKeyByIndex: (index) => items[index]?.label
     });
   }
 
@@ -684,7 +807,7 @@ if (todayStats) {
       metricCard('最近活跃文件', todayStats.insights.topPath, '按更新时间和代码量排序', 'detail') +
     '</section>' +
     '<section class="grid">' +
-      '<div class="panel"><div class="section-title">' + icon('language') + '<h2>' + escapeHtml(rangeHeading) + '语言分布</h2></div><div class="section-note">按当前范围内变更文件的代码行统计（支持 hover 查看详情）。</div><div class="chart" id="chart-today-language"></div><div class="bars chart-fallback">' + renderBarList(todayStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '当前范围暂无语言数据') + '</div></div>' +
+      '<div class="panel"><div class="section-title">' + icon('language') + '<h2>' + escapeHtml(rangeHeading) + '语言分布</h2></div><div class="section-note">按当前范围内变更文件的代码行统计（支持 hover 查看详情）。</div><div class="chart" id="chart-today-language"></div><div class="bars chart-fallback">' + renderBarList(todayStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '当前范围暂无语言数据', { linkGroup: 'today-language', keyGetter: (item) => item.language }) + '</div></div>' +
       '<div class="panel"><div class="section-title">' + icon('meta') + '<h2>统计说明</h2></div><div class="section-note">说明这组范围统计是怎么得出来的，以及这次分析覆盖了什么。</div><div class="todo-summary">' +
         '<div class="todo-item"><span>扫描范围</span><span class="muted">' + escapeHtml(todayStats.analysisMeta.scopeSummary) + '</span></div>' +
         '<div class="todo-item"><span>纳入统计的文件</span><span class="muted">' + numberFormat(todayStats.analysisMeta.matchedFiles) + '</span></div>' +
@@ -715,11 +838,11 @@ if (!presentation.compact && projectStats) {
       metricCard('核心模块', projectStats.insights.topDirectory, '当前代码量最高的模块', 'module') +
     '</section>' +
     '<section class="grid">' +
-      '<div class="panel"><div class="section-title">' + icon('language') + '<h2>语言代码量排行</h2></div><div class="section-note">按有效代码行数倒序（支持 hover 查看详情）。</div><div class="chart" id="chart-language"></div><div class="bars chart-fallback">' + renderBarList(projectStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无语言数据') + '</div></div>' +
+      '<div class="panel"><div class="section-title">' + icon('language') + '<h2>语言代码量排行</h2></div><div class="section-note">按有效代码行数倒序（支持 hover 查看详情）。</div><div class="chart" id="chart-language"></div><div class="bars chart-fallback">' + renderBarList(projectStats.languages.slice(0, presentation.compact ? 6 : 8), 'language', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无语言数据', { linkGroup: 'project-language', keyGetter: (item) => item.language }) + '</div></div>' +
       '<div class="panel"><div class="section-title">' + icon('composition') + '<h2>代码组成</h2></div><div class="section-note">区分代码、注释与空白占比。</div>' + renderComposition(projectStats) + '</div>' +
     '</section>' +
     '<section class="grid">' +
-      '<div class="panel"><div class="section-title">' + icon('module') + '<h2>模块代码量排行</h2></div><div class="section-note">按目录深度聚合（支持 hover 查看详情）。</div><div class="chart" id="chart-module"></div><div class="bars chart-fallback">' + renderBarList(projectStats.directories.slice(0, presentation.compact ? 6 : 8), 'path', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无模块数据') + '</div></div>' +
+      '<div class="panel"><div class="section-title">' + icon('module') + '<h2>模块代码量排行</h2></div><div class="section-note">按目录深度聚合（支持 hover 查看详情）。</div><div class="chart" id="chart-module"></div><div class="bars chart-fallback">' + renderBarList(projectStats.directories.slice(0, presentation.compact ? 6 : 8), 'path', 'codeLines', (value, item) => numberFormat(value) + ' 行 · ' + numberFormat(item.files) + ' 文件', '暂无模块数据', { linkGroup: 'project-module', keyGetter: (item) => item.path }) + '</div></div>' +
       '<div class="panel"><div class="section-title">' + icon('todo') + '<h2>待办摘要</h2></div><div class="section-note">仅统计注释中的 TODO / FIXME / HACK 标记。</div>' + renderTodoSummary(projectStats.todoSummary) + '</div>' +
     '</section>' +
     '<section class="panel" id="ci-section-tree"><div class="section-title">' + icon('tree') + '<h2>模块目录树</h2></div><div class="section-note">支持逐层展开到最深目录，并展示当前目录下的文件（点击文件名可打开）。</div>' + renderTreeNodes(projectStats.directoryTree, 0) + '</section>' +
@@ -741,6 +864,7 @@ if (!presentation.compact && projectStats) {
 }
 
 html += (presentation.compact ? '</main>' : '</main></div></div>' + floatingBarHtml);
+const shellAtmosphereHtml = '<div class="ambient-orb orb-a" aria-hidden="true"></div><div class="ambient-orb orb-b" aria-hidden="true"></div>';
 const updateStickyTop = () => {
   const bar = document.querySelector('.topbar-inner') || document.querySelector('.topbar');
   if (!(bar instanceof HTMLElement)) return;
@@ -779,11 +903,129 @@ function animateCount(node) {
     }
   });
 }
+function registerSurfaceGlow(selector) {
+  const elements = Array.from(document.querySelectorAll(selector));
+  for (const element of elements) {
+    if (!(element instanceof HTMLElement)) continue;
+    if (element.dataset.glowBound === 'true') continue;
+    element.dataset.glowBound = 'true';
+    const glowFadeDurationMs = 240;
+    let glowFrameId = 0;
+    let pendingGlowX = '50%';
+    let pendingGlowY = '50%';
+
+    const clearGlowResetTimer = () => {
+      const glowResetTimer = Number.parseInt(element.dataset.glowResetTimer || '', 10);
+      if (Number.isFinite(glowResetTimer)) {
+        window.clearTimeout(glowResetTimer);
+      }
+      delete element.dataset.glowResetTimer;
+    };
+
+    const resetPosition = () => {
+      element.style.setProperty('--pointer-x', '50%');
+      element.style.setProperty('--pointer-y', '50%');
+    };
+
+    const flushGlowPointer = () => {
+      glowFrameId = 0;
+      element.style.setProperty('--pointer-x', pendingGlowX);
+      element.style.setProperty('--pointer-y', pendingGlowY);
+    };
+
+    const scheduleGlowPointer = (x, y) => {
+      pendingGlowX = x;
+      pendingGlowY = y;
+      if (glowFrameId) return;
+      glowFrameId = window.requestAnimationFrame(() => {
+        flushGlowPointer();
+      });
+    };
+
+    const activateGlow = () => {
+      clearGlowResetTimer();
+      if (!element.classList.contains('surface-glow-active')) {
+        element.classList.remove('surface-glow-fading');
+        element.classList.add('surface-glow-active');
+      }
+      if (element.style.getPropertyValue('--surface-intensity') !== '1') {
+        element.style.setProperty('--surface-intensity', '1');
+      }
+    };
+
+    const fadeOutGlow = () => {
+      clearGlowResetTimer();
+      element.classList.remove('surface-glow-active');
+      element.classList.add('surface-glow-fading');
+      element.style.setProperty('--surface-intensity', '0');
+      const glowResetTimer = window.setTimeout(() => {
+        delete element.dataset.glowResetTimer;
+        if (element.matches(':hover')) return;
+        element.classList.remove('surface-glow-fading');
+        resetPosition();
+      }, glowFadeDurationMs);
+      element.dataset.glowResetTimer = String(glowResetTimer);
+    };
+
+    element.addEventListener('pointerenter', () => {
+      activateGlow();
+    });
+    element.addEventListener('pointermove', (event) => {
+      const rect = element.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const x = ((event.clientX - rect.left) / rect.width) * 100;
+      const y = ((event.clientY - rect.top) / rect.height) * 100;
+      scheduleGlowPointer(x.toFixed(2) + '%', y.toFixed(2) + '%');
+      activateGlow();
+    });
+    element.addEventListener('pointerleave', fadeOutGlow);
+    element.addEventListener('blur', fadeOutGlow, true);
+    element.classList.remove('surface-glow-active', 'surface-glow-fading');
+    resetPosition();
+    element.style.setProperty('--surface-intensity', '0');
+  }
+}
+function highlightSectionFocus(target) {
+  if (!(target instanceof HTMLElement)) return;
+  target.classList.add('section-focus');
+  window.clearTimeout(Number(target.dataset.focusTimer || '0'));
+  const timer = window.setTimeout(() => {
+    target.classList.remove('section-focus');
+    delete target.dataset.focusTimer;
+  }, 1400);
+  target.dataset.focusTimer = String(timer);
+}
+function initNavObserver() {
+  const navItems = Array.from(document.querySelectorAll('[data-nav]'));
+  if (!navItems.length || typeof IntersectionObserver === 'undefined') return;
+  const sections = navItems
+    .map((item) => ({ item, target: document.getElementById(item.getAttribute('data-nav') || '') }))
+    .filter((entry) => entry.target);
+  if (!sections.length) return;
+
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (!visible?.target?.id) return;
+    for (const navItem of navItems) {
+      navItem.classList.toggle('active', navItem.getAttribute('data-nav') === visible.target.id);
+    }
+  }, {
+    threshold: [0.22, 0.4, 0.6],
+    rootMargin: '-18% 0px -52% 0px'
+  });
+
+  for (const entry of sections) {
+    observer.observe(entry.target);
+  }
+}
 function initAnimations() {
   if (typeof gsap === 'undefined' || prefersReducedMotion || motionState.dashboardIntroPlayed) {
     return;
   }
 
+  document.body.classList.add('motion-enhanced');
   gsap.defaults({ ease: 'power3.out' });
   const animateWhenVisible = (selector, vars, options) => {
     const nodes = gsap.utils.toArray(selector);
@@ -807,11 +1049,21 @@ function initAnimations() {
     nodes.forEach((node) => observer.observe(node));
   };
 
-  gsap.fromTo('.topbar-inner', { autoAlpha: 0, y: 18 }, {
-    autoAlpha: 1,
-    y: 0,
-    duration: 0.72
-  });
+  const timeline = gsap.timeline();
+  timeline
+    .fromTo('.ambient-orb', { autoAlpha: 0, scale: 0.9 }, {
+      autoAlpha: 1,
+      scale: 1,
+      duration: 1.1,
+      stagger: 0.08,
+      ease: 'power2.out'
+    })
+    .fromTo('.topbar-inner', { autoAlpha: 0, y: 18, filter: 'blur(10px)' }, {
+      autoAlpha: 1,
+      y: 0,
+      filter: 'blur(0px)',
+      duration: 0.72
+    }, '-=0.82');
   if (!presentation.compact) {
     animateWhenVisible('.rail-chip', { autoAlpha: 1, y: 0, duration: 0.64, stagger: 0.06 });
     animateWhenVisible('.nav-item', { autoAlpha: 1, y: 0, duration: 0.62, stagger: 0.05 });
@@ -854,9 +1106,25 @@ function initAnimations() {
       ease: 'power2.out'
     });
   });
+  gsap.to('.orb-a', {
+    x: 16,
+    y: -12,
+    duration: 8.4,
+    repeat: -1,
+    yoyo: true,
+    ease: 'sine.inOut'
+  });
+  gsap.to('.orb-b', {
+    x: -12,
+    y: 14,
+    duration: 9.2,
+    repeat: -1,
+    yoyo: true,
+    ease: 'sine.inOut'
+  });
   vscode.setState({ ...motionState, dashboardIntroPlayed: true });
 }
-app.innerHTML = '<div class="sticky-sentinel" aria-hidden="true"></div>' + html;
+app.innerHTML = shellAtmosphereHtml + '<div class="sticky-sentinel" aria-hidden="true"></div>' + html;
 const topbar = document.querySelector('.topbar');
 const sentinel = document.querySelector('.sticky-sentinel');
 if (topbar && sentinel && typeof IntersectionObserver !== 'undefined') {
@@ -942,6 +1210,8 @@ scheduleStickyTop();
 for (const menu of menus) {
   syncCompactMenuPopover(menu);
 }
+registerSurfaceGlow('.card, .panel, .nav-item, .rail-chip, .menu-item, .fab-button, .compare-card, .compare-file-row, .compare-delta-row, .step');
+initNavObserver();
 if (document.fonts?.ready) {
   document.fonts.ready.then(() => {
     scheduleStickyTop();
@@ -965,6 +1235,7 @@ document.addEventListener('click', (event) => {
     const target = targetId ? document.getElementById(targetId) : null;
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      highlightSectionFocus(target);
       if (typeof gsap !== 'undefined' && !prefersReducedMotion) {
         gsap.fromTo(target, { y: 12 }, { y: 0, duration: 0.42, ease: 'power2.out' });
         gsap.fromTo(target, {
@@ -976,10 +1247,6 @@ document.addEventListener('click', (event) => {
           repeat: 1
         });
       }
-      for (const item of document.querySelectorAll('[data-nav].active')) {
-        item.classList.remove('active');
-      }
-      navElement.classList.add('active');
     }
     return;
   }

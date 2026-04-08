@@ -636,6 +636,51 @@ suite('Compare Primitives Test Suite', () => {
     assert.ok(html.includes('setState('));
   });
 
+  test('getCompareHtml renders compare status classes and ambient glow hooks', () => {
+    const html = getCompareHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      createInitialComparePanelState(),
+      { cssUri: 'vscode-webview://style.css', gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('class="compare-shell compare-state-idle"'));
+    assert.ok(html.includes('ambient-orb orb-a orb-compare'));
+    assert.ok(html.includes('ambient-orb orb-b orb-compare'));
+  });
+
+  test('getCompareHtml delays glow pointer reset until fade-out completes', () => {
+    const html = getCompareHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      createInitialComparePanelState(),
+      { cssUri: 'vscode-webview://style.css', gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('glowResetTimer'));
+    assert.ok(html.includes("window.setTimeout(() => {"));
+  });
+
+  test('getCompareHtml uses active and fading glow states for smoother pointer exit', () => {
+    const html = getCompareHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      createInitialComparePanelState(),
+      { cssUri: 'vscode-webview://style.css', gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('surface-glow-active'));
+    assert.ok(html.includes('surface-glow-fading'));
+  });
+
+  test('getCompareHtml batches glow pointer updates with requestAnimationFrame', () => {
+    const html = getCompareHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      createInitialComparePanelState(),
+      { cssUri: 'vscode-webview://style.css', gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('glowFrameId'));
+    assert.ok(html.includes('requestAnimationFrame(() => {'));
+  });
+
   test('getCompareHtml renders local branch dropdowns in branch mode', () => {
     const state = {
       ...createInitialComparePanelState(),

@@ -21,8 +21,10 @@ export function getCompareHtml(
   <title>Code Info Compare</title>
   ${cssLink}
 </head>
-<body class="compare-shell">
+<body class="compare-shell compare-state-${escapeHtml(state.status)}">
   <main class="compare-page">
+    <div class="ambient-orb orb-a orb-compare" aria-hidden="true"></div>
+    <div class="ambient-orb orb-b orb-compare" aria-hidden="true"></div>
     <header class="compare-header">
       <div>
         <div class="compare-eyebrow">Code Info</div>
@@ -32,7 +34,7 @@ export function getCompareHtml(
       <div class="compare-status compare-status-${escapeHtml(state.status)}">${escapeHtml(modeLabel)}</div>
     </header>
 
-    <section class="compare-panel">
+    <section class="compare-panel panel-surface">
       <div class="compare-mode-switch">
         <button class="compare-mode ${state.mode === 'branch' ? 'active' : ''}" data-command="compare:setMode" data-mode="branch">当前分支 vs main/master</button>
         <button class="compare-mode ${state.mode === 'commit' ? 'active' : ''}" data-command="compare:setMode" data-mode="commit">两个 Commit 对比</button>
@@ -47,7 +49,7 @@ export function getCompareHtml(
       ${state.latestError ? `<div class="compare-banner compare-banner-error">${escapeHtml(state.latestError)}</div>` : ''}
     </section>
 
-    ${result ? renderSummarySection(result.summary) : '<section class="compare-panel"><div class="compare-empty">还没有对比结果，先选择模式并运行一次。</div></section>'}
+    ${result ? renderSummarySection(result.summary) : '<section class="compare-panel panel-surface"><div class="compare-empty">还没有对比结果，先选择模式并运行一次。</div></section>'}
     ${result ? renderFilesSection(result.files) : ''}
     ${result ? renderDeltaSection('语言变化', result.languages.map((item) => ({
       label: item.language,
@@ -74,8 +76,82 @@ export function getCompareHtml(
     const motionState = vscode.getState() || {};
     const shouldPlayIntro = !motionState.compareIntroPlayed;
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const registerSurfaceGlow = (selector) => {
+      document.querySelectorAll(selector).forEach((element) => {
+        if (!(element instanceof HTMLElement) || element.dataset.glowBound === 'true') return;
+        element.dataset.glowBound = 'true';
+        const glowFadeDurationMs = 240;
+        let glowFrameId = 0;
+        let pendingGlowX = '50%';
+        let pendingGlowY = '50%';
+        const clearGlowResetTimer = () => {
+          const glowResetTimer = Number.parseInt(element.dataset.glowResetTimer || '', 10);
+          if (Number.isFinite(glowResetTimer)) {
+            window.clearTimeout(glowResetTimer);
+          }
+          delete element.dataset.glowResetTimer;
+        };
+        const resetPosition = () => {
+          element.style.setProperty('--pointer-x', '50%');
+          element.style.setProperty('--pointer-y', '50%');
+        };
+        const flushGlowPointer = () => {
+          glowFrameId = 0;
+          element.style.setProperty('--pointer-x', pendingGlowX);
+          element.style.setProperty('--pointer-y', pendingGlowY);
+        };
+        const scheduleGlowPointer = (x, y) => {
+          pendingGlowX = x;
+          pendingGlowY = y;
+          if (glowFrameId) return;
+          glowFrameId = window.requestAnimationFrame(() => {
+            flushGlowPointer();
+          });
+        };
+        const activateGlow = () => {
+          clearGlowResetTimer();
+          if (!element.classList.contains('surface-glow-active')) {
+            element.classList.remove('surface-glow-fading');
+            element.classList.add('surface-glow-active');
+          }
+          if (element.style.getPropertyValue('--surface-intensity') !== '1') {
+            element.style.setProperty('--surface-intensity', '1');
+          }
+        };
+        const fadeOutGlow = () => {
+          clearGlowResetTimer();
+          element.classList.remove('surface-glow-active');
+          element.classList.add('surface-glow-fading');
+          element.style.setProperty('--surface-intensity', '0');
+          const glowResetTimer = window.setTimeout(() => {
+            delete element.dataset.glowResetTimer;
+            if (element.matches(':hover')) return;
+            element.classList.remove('surface-glow-fading');
+            resetPosition();
+          }, glowFadeDurationMs);
+          element.dataset.glowResetTimer = String(glowResetTimer);
+        };
+        element.addEventListener('pointerenter', () => {
+          activateGlow();
+        });
+        element.addEventListener('pointermove', (event) => {
+          const rect = element.getBoundingClientRect();
+          if (!rect.width || !rect.height) return;
+          const x = ((event.clientX - rect.left) / rect.width) * 100;
+          const y = ((event.clientY - rect.top) / rect.height) * 100;
+          scheduleGlowPointer(x.toFixed(2) + '%', y.toFixed(2) + '%');
+          activateGlow();
+        });
+        element.addEventListener('pointerleave', fadeOutGlow);
+        element.classList.remove('surface-glow-active', 'surface-glow-fading');
+        resetPosition();
+        element.style.setProperty('--surface-intensity', '0');
+      });
+    };
+    registerSurfaceGlow('.compare-panel, .compare-card, .compare-file-row, .compare-delta-row, .compare-mode, .compare-run, .compare-open');
 
     if (typeof gsap !== 'undefined' && !prefersReducedMotion && shouldPlayIntro) {
+      document.body.classList.add('motion-enhanced');
       const animateWhenVisible = (selector, vars, options = {}) => {
         const nodes = Array.from(document.querySelectorAll(selector));
         if (!nodes.length) return;
@@ -93,12 +169,28 @@ export function getCompareHtml(
         nodes.forEach((node) => observer.observe(node));
       };
 
-      gsap.fromTo('.compare-header', { autoAlpha: 0, y: 20 }, {
-        autoAlpha: 1,
-        y: 0,
-        duration: 0.72,
-        ease: 'power3.out'
-      });
+      const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } });
+      timeline
+        .fromTo('.ambient-orb', { autoAlpha: 0, scale: 0.9 }, {
+          autoAlpha: 1,
+          scale: 1,
+          duration: 1.1,
+          stagger: 0.08,
+          ease: 'power2.out'
+        })
+        .fromTo('.compare-header', { autoAlpha: 0, y: 20, filter: 'blur(10px)' }, {
+          autoAlpha: 1,
+          y: 0,
+          filter: 'blur(0px)',
+          duration: 0.72
+        }, '-=0.82')
+        .fromTo('.compare-mode, .compare-input, .compare-run', { autoAlpha: 0, y: 14 }, {
+          autoAlpha: 1,
+          y: 0,
+          duration: 0.46,
+          stagger: 0.04
+        }, '-=0.38');
+
       animateWhenVisible('.compare-panel', { autoAlpha: 1, y: 0, duration: 0.68, ease: 'power3.out' });
       animateWhenVisible('.compare-summary-grid', { autoAlpha: 1, y: 0, duration: 0.66, ease: 'power3.out' });
       animateWhenVisible('.compare-file-row', { autoAlpha: 1, y: 0, duration: 0.58, ease: 'power3.out', stagger: 0.03 });
@@ -121,6 +213,22 @@ export function getCompareHtml(
             node.textContent = original;
           }
         });
+      });
+      gsap.to('.orb-a', {
+        x: 16,
+        y: -12,
+        duration: 8.4,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut'
+      });
+      gsap.to('.orb-b', {
+        x: -12,
+        y: 14,
+        duration: 9.2,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut'
       });
       vscode.setState({ ...motionState, compareIntroPlayed: true });
     }

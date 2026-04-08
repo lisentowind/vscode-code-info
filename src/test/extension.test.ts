@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import * as vscode from 'vscode';
 import { collectAnalyzedFiles } from '../analysis/shared';
 import { createPresetDateRange, formatDateRangeLabel } from '../analysis/dateRange';
@@ -628,6 +630,69 @@ suite('Extension Test Suite', () => {
 
     assert.ok(html.includes('getState()'));
     assert.ok(html.includes('setState('));
+  });
+
+  test('empty state renders ambient motion surfaces for the upgraded visual treatment', () => {
+    const html = getEmptyStateHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      false,
+      { gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('ambient-orb orb-a'));
+    assert.ok(html.includes('ambient-orb orb-b'));
+    assert.ok(html.includes('panel panel-surface'));
+  });
+
+  test('empty state glow logic delays pointer reset until fade-out completes', () => {
+    const html = getEmptyStateHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      false,
+      { gsapUri: 'vscode-webview://gsap.js' }
+    );
+
+    assert.ok(html.includes('glowResetTimer'));
+    assert.ok(html.includes("window.setTimeout(() => {"));
+  });
+
+  test('dashboard runtime uses active and fading glow states for smoother pointer exit', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('surface-glow-active'));
+    assert.ok(runtime.includes('surface-glow-fading'));
+  });
+
+  test('dashboard runtime batches glow pointer updates with requestAnimationFrame', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('glowFrameId'));
+    assert.ok(runtime.includes('requestAnimationFrame(() => {'));
+  });
+
+  test('dashboard runtime includes chart hover and section focus polish hooks', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('bindChartHoverState('));
+    assert.ok(runtime.includes('highlightSectionFocus('));
+  });
+
+  test('dashboard runtime includes chart and list linking hooks', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('bindChartListSync('));
+    assert.ok(runtime.includes("renderDataLinkAttrs('project-language'"));
   });
 
   test('dashboard shell injects runtime entry in compact and full layouts', () => {

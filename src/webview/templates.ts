@@ -24,8 +24,10 @@ export function getEmptyStateHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   ${cssUri ? `<link rel="stylesheet" href="${cssUri}" />` : ''}
 </head>
-<body class="${compact ? 'compact' : ''}">
+<body class="${compact ? 'compact ' : ''}empty-shell">
   <div class="shell">
+    <div class="ambient-orb orb-a" aria-hidden="true"></div>
+    <div class="ambient-orb orb-b" aria-hidden="true"></div>
     <div class="sticky-sentinel" aria-hidden="true"></div>
     <header class="topbar">
       <div class="topbar-inner">
@@ -49,7 +51,7 @@ export function getEmptyStateHtml(
       </div>
     </header>
     <main class="page">
-      <section class="panel">
+      <section class="panel panel-surface">
         <div class="empty-hero">
           <div class="empty-art" aria-hidden="true"></div>
           <div class="empty-body">
@@ -117,7 +119,81 @@ export function getEmptyStateHtml(
       if (element.hasAttribute('disabled')) return;
       vscode.postMessage({ command: element.getAttribute('data-command') });
     });
+    const registerSurfaceGlow = (selector) => {
+      document.querySelectorAll(selector).forEach((element) => {
+        if (!(element instanceof HTMLElement) || element.dataset.glowBound === 'true') return;
+        element.dataset.glowBound = 'true';
+        const glowFadeDurationMs = 240;
+        let glowFrameId = 0;
+        let pendingGlowX = '50%';
+        let pendingGlowY = '50%';
+        const clearGlowResetTimer = () => {
+          const glowResetTimer = Number.parseInt(element.dataset.glowResetTimer || '', 10);
+          if (Number.isFinite(glowResetTimer)) {
+            window.clearTimeout(glowResetTimer);
+          }
+          delete element.dataset.glowResetTimer;
+        };
+        const resetPosition = () => {
+          element.style.setProperty('--pointer-x', '50%');
+          element.style.setProperty('--pointer-y', '50%');
+        };
+        const flushGlowPointer = () => {
+          glowFrameId = 0;
+          element.style.setProperty('--pointer-x', pendingGlowX);
+          element.style.setProperty('--pointer-y', pendingGlowY);
+        };
+        const scheduleGlowPointer = (x, y) => {
+          pendingGlowX = x;
+          pendingGlowY = y;
+          if (glowFrameId) return;
+          glowFrameId = window.requestAnimationFrame(() => {
+            flushGlowPointer();
+          });
+        };
+        const activateGlow = () => {
+          clearGlowResetTimer();
+          if (!element.classList.contains('surface-glow-active')) {
+            element.classList.remove('surface-glow-fading');
+            element.classList.add('surface-glow-active');
+          }
+          if (element.style.getPropertyValue('--surface-intensity') !== '1') {
+            element.style.setProperty('--surface-intensity', '1');
+          }
+        };
+        const fadeOutGlow = () => {
+          clearGlowResetTimer();
+          element.classList.remove('surface-glow-active');
+          element.classList.add('surface-glow-fading');
+          element.style.setProperty('--surface-intensity', '0');
+          const glowResetTimer = window.setTimeout(() => {
+            delete element.dataset.glowResetTimer;
+            if (element.matches(':hover')) return;
+            element.classList.remove('surface-glow-fading');
+            resetPosition();
+          }, glowFadeDurationMs);
+          element.dataset.glowResetTimer = String(glowResetTimer);
+        };
+        element.addEventListener('pointerenter', () => {
+          activateGlow();
+        });
+        element.addEventListener('pointermove', (event) => {
+          const rect = element.getBoundingClientRect();
+          if (!rect.width || !rect.height) return;
+          const x = ((event.clientX - rect.left) / rect.width) * 100;
+          const y = ((event.clientY - rect.top) / rect.height) * 100;
+          scheduleGlowPointer(x.toFixed(2) + '%', y.toFixed(2) + '%');
+          activateGlow();
+        });
+        element.addEventListener('pointerleave', fadeOutGlow);
+        element.classList.remove('surface-glow-active', 'surface-glow-fading');
+        resetPosition();
+        element.style.setProperty('--surface-intensity', '0');
+      });
+    };
+    registerSurfaceGlow('.panel, .step, .action');
     if (typeof gsap !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches && shouldPlayIntro) {
+      document.body.classList.add('motion-enhanced');
       const animateGroupWhenVisible = (selector, vars, options = {}) => {
         const nodes = Array.from(document.querySelectorAll(selector));
         if (!nodes.length) return;
@@ -135,15 +211,37 @@ export function getEmptyStateHtml(
         nodes.forEach((node) => observer.observe(node));
       };
 
-      gsap.fromTo('.topbar-inner', { autoAlpha: 0, y: 18 }, {
-        autoAlpha: 1,
-        y: 0,
-        duration: 0.72,
-        ease: 'power3.out'
-      });
+      const timeline = gsap.timeline({ defaults: { ease: 'power3.out' } });
+      timeline
+        .fromTo('.topbar-inner', { autoAlpha: 0, y: 18, filter: 'blur(10px)' }, {
+          autoAlpha: 1,
+          y: 0,
+          filter: 'blur(0px)',
+          duration: 0.72
+        })
+        .fromTo('.empty-art', { autoAlpha: 0, scale: 0.96, rotate: -4 }, {
+          autoAlpha: 1,
+          scale: 1,
+          rotate: 0,
+          duration: 0.66
+        }, '-=0.42')
+        .fromTo('.empty-title, .empty-body > p, .toolbar .action', { autoAlpha: 0, y: 14 }, {
+          autoAlpha: 1,
+          y: 0,
+          duration: 0.52,
+          stagger: 0.06
+        }, '-=0.34');
+
       animateGroupWhenVisible('.panel', { autoAlpha: 1, y: 0, duration: 0.72, ease: 'power3.out' });
       animateGroupWhenVisible('.step', { autoAlpha: 1, y: 0, duration: 0.64, ease: 'power3.out', stagger: 0.08 });
       animateGroupWhenVisible('.hint', { autoAlpha: 1, y: 0, duration: 0.56, ease: 'power3.out' });
+      gsap.fromTo('.ambient-orb', { autoAlpha: 0, scale: 0.9 }, {
+        autoAlpha: 1,
+        scale: 1,
+        duration: 1.1,
+        stagger: 0.08,
+        ease: 'power2.out'
+      });
       gsap.to('.empty-art', {
         y: -10,
         rotate: 4,
@@ -151,6 +249,22 @@ export function getEmptyStateHtml(
         ease: 'sine.inOut',
         repeat: -1,
         yoyo: true
+      });
+      gsap.to('.orb-a', {
+        x: 18,
+        y: -14,
+        duration: 8,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut'
+      });
+      gsap.to('.orb-b', {
+        x: -14,
+        y: 16,
+        duration: 9,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut'
       });
       vscode.setState({ ...motionState, emptyIntroPlayed: true });
     }
