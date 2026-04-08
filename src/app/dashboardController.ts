@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
 import { analyzeRangeWorkspace } from '../analysis/todayAnalyzer';
 import type { AnalysisDateRangePreset } from '../analysis/dateRange';
-import { analyzeWorkspace } from '../analysis/workspaceAnalyzer';
+import { analyzeWorkspaceWithOptions } from '../analysis/workspaceAnalyzer';
 import { decideRangeRefresh } from './refreshPolicy';
 import { clearCodeInfoAppState, createCodeInfoAppState, getDashboardData, type CodeInfoAppState } from './state';
 import { showEmptyIfOpen, type DashboardPanelState, updatePanelIfOpen } from '../ui/panels';
 import { CodeInfoSidebarProvider } from '../ui/sidebar';
 import { CodeInfoStatusBarController } from '../ui/statusBar';
-import type { Logger, TodayStats, WorkspaceStats } from '../types';
+import type { GitRootSelection, Logger, TodayStats, WorkspaceStats } from '../types';
+import { GitRootContextController } from '../workspace/gitRootContext';
 
 const RANGE_REFRESH_CACHE_MAX_AGE_MS = 60_000;
 
@@ -18,11 +19,12 @@ export class DashboardController {
     private readonly sidebarProvider: CodeInfoSidebarProvider,
     private readonly statusBar: CodeInfoStatusBarController,
     private readonly panelState: DashboardPanelState,
+    private readonly gitRootContext: GitRootContextController,
     private readonly logger?: Logger
   ) { }
 
   public getDashboardData() {
-    return getDashboardData(this.state);
+    return getDashboardData(this.state, this.gitRootContext.getSnapshot());
   }
 
   public getLatestTodayStats(): TodayStats | undefined {
@@ -53,6 +55,24 @@ export class DashboardController {
     this.statusBar.update(this.state.latestTodayStats);
   }
 
+  public async handleGitRootSelectionChanged(): Promise<void> {
+    this.renderLatest();
+    updatePanelIfOpen(this.panelState, this.getDashboardData(), { reveal: false });
+
+    if (this.state.latestProjectStats) {
+      await this.analyzeProject({ revealPanel: false });
+    }
+
+    if (this.state.latestTodayStats) {
+      await this.refreshToday({
+        revealPanel: false,
+        silent: true,
+        preset: this.state.latestTodayStats.rangePreset,
+        force: true
+      });
+    }
+  }
+
   public async ensureStats(): Promise<WorkspaceStats | undefined> {
     if (this.state.latestProjectStats) {
       return this.state.latestProjectStats;
@@ -69,13 +89,14 @@ export class DashboardController {
     }
 
     try {
+      const gitRootSelection = this.gitRootContext.getSnapshot();
       const stats = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: 'Code Info 正在分析工作区...',
           cancellable: false
         },
-        async () => analyzeWorkspace(this.logger)
+        async () => analyzeWorkspaceWithOptions(this.logger, this.getGitRootAnalysisOptions(gitRootSelection))
       );
 
       this.state.latestProjectStats = stats;
@@ -134,7 +155,12 @@ export class DashboardController {
     this.state.refreshTodayTaskPreset = requestedPreset;
     this.state.refreshTodayTask = (async () => {
       try {
-        const stats = await analyzeRangeWorkspace(requestedPreset, this.logger);
+        const gitRootSelection = this.gitRootContext.getSnapshot();
+        const stats = await analyzeRangeWorkspace(
+          requestedPreset,
+          this.logger,
+          this.getGitRootAnalysisOptions(gitRootSelection)
+        );
         this.state.latestTodayStats = stats;
         this.sidebarProvider.render(this.getDashboardData());
         this.statusBar.update(this.state.latestTodayStats);
@@ -154,5 +180,42 @@ export class DashboardController {
     })();
 
     return this.state.refreshTodayTask;
+  }
+
+  public async selectGitRoot(): Promise<void> {
+    const snapshot = this.gitRootContext.getSnapshot();
+    if (!snapshot.isMultiRoot || snapshot.options.length < 2) {
+      return;
+    }
+
+    const picked = await vscode.window.showQuickPick(
+      snapshot.options.map((option) => ({
+        label: option.label,
+        description: option.rootPath,
+        rootPath: option.rootPath
+      })),
+      {
+        placeHolder: '选择当前 Git 仓库',
+        title: 'Code Info · Git 仓库'
+      }
+    );
+
+    if (!picked || picked.rootPath === snapshot.selected?.rootPath) {
+      return;
+    }
+
+    await this.gitRootContext.setSelectedRootPath(picked.rootPath);
+  }
+
+  private getGitRootAnalysisOptions(selection: GitRootSelection): { gitRootPath?: string; gitRootLabel?: string } | undefined {
+    const selected = selection.selected;
+    if (!selected) {
+      return undefined;
+    }
+
+    return {
+      gitRootPath: selected.rootPath,
+      gitRootLabel: selected.label
+    };
   }
 }

@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import { analyzeCompare } from '../analysis/compareAnalyzer';
 import { getCurrentBranchName, listLocalBranches, resolveDefaultCompareBase } from '../git/compare';
-import type { CompareOpenTarget, CompareRequest, CompareStats } from '../types';
+import type { CompareOpenTarget, CompareRequest, CompareStats, GitRootOption, GitRootSelection } from '../types';
 import { openCompareTarget } from './resourceNavigator';
 import { getCompareHtml } from '../webview/compareTemplates';
 import { getSingleRootPathOrError } from '../workspace/rootSupport';
+import type { GitRootContextController } from '../workspace/gitRootContext';
 
 export type ComparePanelRunStatus = 'idle' | 'loading' | 'success' | 'error';
 
@@ -13,6 +14,8 @@ export type ComparePanelState = {
   baseRef: string;
   headRef: string;
   branchOptions: string[];
+  gitRootOptions: GitRootOption[];
+  selectedGitRootPath: string;
   status: ComparePanelRunStatus;
   latestResult?: CompareStats;
   latestError?: string;
@@ -22,6 +25,8 @@ export type ComparePanelControllerState = {
   panel: vscode.WebviewPanel | undefined;
   extensionUri?: vscode.Uri;
   state: ComparePanelState;
+  gitRootContext?: GitRootContextController;
+  gitRootSubscription?: vscode.Disposable;
 };
 
 type ComparePanelAction =
@@ -44,6 +49,8 @@ export function createInitialComparePanelState(): ComparePanelState {
     baseRef: '',
     headRef: '',
     branchOptions: [],
+    gitRootOptions: [],
+    selectedGitRootPath: '',
     status: 'idle'
   };
 }
@@ -58,6 +65,24 @@ export function applyCompareModeChange(
     baseRef: '',
     headRef: '',
     branchOptions: [],
+    selectedGitRootPath: state.selectedGitRootPath,
+    gitRootOptions: state.gitRootOptions,
+    status: 'idle',
+    latestResult: undefined,
+    latestError: undefined
+  };
+}
+
+export function applyCompareGitRootChange(
+  state: ComparePanelState,
+  rootPath: string
+): ComparePanelState {
+  return {
+    ...state,
+    baseRef: '',
+    headRef: '',
+    branchOptions: [],
+    selectedGitRootPath: rootPath,
     status: 'idle',
     latestResult: undefined,
     latestError: undefined
@@ -116,6 +141,9 @@ export function showComparePanel(
   controller: ComparePanelControllerState,
   extensionUri?: vscode.Uri
 ): void {
+  if (controller.gitRootContext) {
+    controller.state = syncCompareStateWithGitRootSelection(controller.state, controller.gitRootContext.getSnapshot());
+  }
   const panel = ensureComparePanel(controller, extensionUri);
   renderComparePanel(panel, controller.state, controller.extensionUri);
   panel.reveal(vscode.ViewColumn.One, false);
@@ -124,7 +152,9 @@ export function showComparePanel(
 }
 
 export function resetComparePanel(controller: ComparePanelControllerState): void {
-  controller.state = createInitialComparePanelState();
+  controller.state = controller.gitRootContext
+    ? syncCompareStateWithGitRootSelection(createInitialComparePanelState(), controller.gitRootContext.getSnapshot())
+    : createInitialComparePanelState();
   if (controller.panel) {
     renderComparePanel(controller.panel, controller.state, controller.extensionUri);
   }
@@ -159,7 +189,7 @@ async function ensureBranchModeReady(controller: ComparePanelControllerState): P
 }
 
 async function hydrateBranchState(state: ComparePanelState): Promise<ComparePanelState> {
-  const rootPath = getWorkspaceRootPath();
+  const rootPath = getCompareRootPath(state);
   const [branchOptions, currentBranch] = await Promise.all([
     listLocalBranches(rootPath),
     getCurrentBranchName(rootPath)
@@ -187,11 +217,16 @@ function getWorkspaceRootPath(): string {
   return getSingleRootPathOrError(vscode.workspace.workspaceFolders, '变更对比');
 }
 
+function getCompareRootPath(state: ComparePanelState): string {
+  return state.selectedGitRootPath || getWorkspaceRootPath();
+}
+
 function ensureComparePanel(
   controller: ComparePanelControllerState,
   extensionUri?: vscode.Uri
 ): vscode.WebviewPanel {
   controller.extensionUri = extensionUri;
+  bindCompareGitRootContext(controller);
 
   if (!controller.panel) {
     controller.panel = vscode.window.createWebviewPanel(
@@ -207,6 +242,8 @@ function ensureComparePanel(
     applyComparePanelIcon(controller.panel, extensionUri);
 
     controller.panel.onDidDispose(() => {
+      controller.gitRootSubscription?.dispose();
+      controller.gitRootSubscription = undefined;
       controller.panel = undefined;
     });
     controller.panel.webview.onDidReceiveMessage((message: ComparePanelMessage) => {
@@ -215,6 +252,46 @@ function ensureComparePanel(
   }
 
   return controller.panel;
+}
+
+function bindCompareGitRootContext(controller: ComparePanelControllerState): void {
+  if (!controller.gitRootContext || controller.gitRootSubscription) {
+    return;
+  }
+
+  controller.gitRootSubscription = controller.gitRootContext.onDidChange((selection) => {
+    const previousRootPath = controller.state.selectedGitRootPath;
+    controller.state = syncCompareStateWithGitRootSelection(controller.state, selection);
+    if (controller.panel) {
+      renderComparePanel(controller.panel, controller.state, controller.extensionUri);
+    }
+    if (
+      controller.state.mode === 'branch' &&
+      controller.state.selectedGitRootPath &&
+      (previousRootPath !== controller.state.selectedGitRootPath || !controller.state.branchOptions.length)
+    ) {
+      void ensureBranchModeReady(controller);
+    }
+  });
+}
+
+export function syncCompareStateWithGitRootSelection(
+  state: ComparePanelState,
+  selection: GitRootSelection
+): ComparePanelState {
+  const nextSelectedGitRootPath = selection.selected?.rootPath ?? '';
+  const nextGitRootOptions = selection.isMultiRoot ? selection.options : [];
+  const nextState = {
+    ...state,
+    gitRootOptions: nextGitRootOptions,
+    selectedGitRootPath: nextSelectedGitRootPath
+  };
+
+  if (state.selectedGitRootPath && state.selectedGitRootPath !== nextSelectedGitRootPath) {
+    return applyCompareGitRootChange(nextState, nextSelectedGitRootPath);
+  }
+
+  return nextState;
 }
 
 async function handleComparePanelMessage(
@@ -241,6 +318,22 @@ async function handleComparePanelMessage(
       controller.state = { ...controller.state, headRef: message.value ?? '', latestError: undefined };
       if (controller.panel) {
         renderComparePanel(controller.panel, controller.state, controller.extensionUri);
+      }
+      return;
+    case 'compare:updateGitRoot':
+      if (!message.value) {
+        return;
+      }
+      if (controller.gitRootContext) {
+        await controller.gitRootContext.setSelectedRootPath(message.value);
+        return;
+      }
+      controller.state = applyCompareGitRootChange(controller.state, message.value);
+      if (controller.panel) {
+        renderComparePanel(controller.panel, controller.state, controller.extensionUri);
+      }
+      if (controller.state.mode === 'branch') {
+        await ensureBranchModeReady(controller);
       }
       return;
     case 'compare:run':
@@ -275,7 +368,10 @@ async function runCompare(controller: ComparePanelControllerState): Promise<void
   }
 
   try {
-    const result = await analyzeCompare(request);
+    const result = await analyzeCompare(request, undefined, {
+      rootPath: getCompareRootPath(controller.state),
+      workspaceFolderNames: vscode.workspace.workspaceFolders?.map((folder) => folder.name) ?? []
+    });
     controller.state = reduceComparePanelState(controller.state, { type: 'run:success', result });
   } catch (error) {
     controller.state = reduceComparePanelState(controller.state, {

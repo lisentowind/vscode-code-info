@@ -40,6 +40,7 @@ export function getCompareHtml(
         <button class="compare-mode ${state.mode === 'branch' ? 'active' : ''}" data-command="compare:setMode" data-mode="branch">当前分支 vs main/master</button>
         <button class="compare-mode ${state.mode === 'commit' ? 'active' : ''}" data-command="compare:setMode" data-mode="commit">两个 Commit 对比</button>
       </div>
+      ${state.gitRootOptions.length > 1 ? renderGitRootSelector(state.gitRootOptions, state.selectedGitRootPath) : ''}
       <div class="compare-input-row">
         ${state.mode === 'branch'
           ? renderBranchSelectors(state.branchOptions, state.baseRef, state.headRef)
@@ -251,6 +252,7 @@ export function getCompareHtml(
     });
     bindValueChange('baseRef', 'input', 'compare:updateBaseRef');
     bindValueChange('headRef', 'input', 'compare:updateHeadRef');
+    bindValueChange('gitRootPath', 'change', 'compare:updateGitRoot');
     bindValueChange('branchBaseRef', 'change', 'compare:updateBaseRef');
     bindValueChange('branchHeadRef', 'change', 'compare:updateHeadRef');
 
@@ -274,6 +276,21 @@ function resolveEmptyMessage(latestError?: string): string {
 
 function isMultiRootUnsupportedError(latestError?: string): boolean {
   return Boolean(latestError?.includes('多根工作区'));
+}
+
+function renderGitRootSelector(gitRootOptions: ComparePanelState['gitRootOptions'], selectedGitRootPath: string): string {
+  return `
+    <div class="compare-input-row">
+      <select id="gitRootPath" class="compare-input">
+        ${gitRootOptions
+          .map(
+            (option) =>
+              `<option value="${escapeAttribute(option.rootPath)}"${option.rootPath === selectedGitRootPath ? ' selected' : ''}>${escapeHtml(option.label)}</option>`
+          )
+          .join('')}
+      </select>
+    </div>
+  `;
 }
 
 function renderBranchSelectors(branchOptions: string[], baseRef: string, headRef: string): string {

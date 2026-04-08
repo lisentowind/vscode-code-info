@@ -20,7 +20,8 @@ export async function analyzeTodayWorkspace(logger?: Logger): Promise<TodayStats
 
 export async function analyzeRangeWorkspace(
   preset: AnalysisDateRangePreset,
-  logger?: Logger
+  logger?: Logger,
+  options?: { gitRootPath?: string; gitRootLabel?: string }
 ): Promise<TodayStats> {
   const startTime = Date.now();
   const folders = vscode.workspace.workspaceFolders;
@@ -35,13 +36,16 @@ export async function analyzeRangeWorkspace(
   const range = createPresetDateRange(preset);
   const gitSinceLabel = formatDateRangeLabel(range.start, range.end);
   const gitSupport = resolveWorkspaceGitSupport(folders);
+  const gitRootPath = options?.gitRootPath ?? (gitSupport.supported ? gitRoot : undefined);
   const gitChanges = gitSupport.supported
-    ? await analyzeGitTodayChanges(gitRoot, range.start)
-    : createUnavailableGitTodayChangeSummary(gitSupport.reason);
+    ? await analyzeGitTodayChanges(gitRootPath ?? gitRoot, range.start)
+    : gitRootPath
+      ? await analyzeGitTodayChanges(gitRootPath, range.start)
+      : createUnavailableGitTodayChangeSummary(gitSupport.reason);
   const deletedFiles: TodayDeletedFile[] = gitChanges.available
     ? gitChanges.deletedFiles
       .map((filePath) => {
-        const absolutePath = path.join(gitRoot, filePath);
+        const absolutePath = path.join(gitRootPath ?? gitRoot, filePath);
         const relativePath = vscode.workspace.asRelativePath(absolutePath, false);
         return { path: relativePath };
       })
@@ -141,6 +145,7 @@ export async function analyzeRangeWorkspace(
       scopeSummary,
       gitAvailable: gitChanges.available,
       gitUnavailableReason: gitChanges.unavailableReason,
+      gitRootLabel: options?.gitRootLabel,
       gitSince: gitSinceLabel,
       sources
     }

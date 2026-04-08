@@ -25,6 +25,7 @@ try {
 
 const projectStats = data.projectStats;
 const todayStats = data.todayStats;
+const gitRoot = data.gitRoot;
 const compactMenuClass = presentation.compact ? ' menu-compact' : '';
 const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let app = document.getElementById('app');
@@ -89,7 +90,11 @@ function describeTodaySourceSummary(todayAnalysisMeta) {
     todayAnalysisMeta?.gitUnavailableReason,
     sources.deletedFiles === 'git-log' || sources.lineDeltas === 'git-log'
   );
-  return '文件活动来源：' + fileSource + '；删除与增删行来源：' + changeSource;
+  const gitRootLabel = todayAnalysisMeta?.gitRootLabel;
+  const gitSourceLabel = gitRootLabel && changeSource === 'Git 提交'
+    ? ('当前 Git 根目录 ' + gitRootLabel)
+    : changeSource;
+  return '文件活动来源：' + fileSource + '；删除与增删行来源：' + gitSourceLabel;
 }
 function describeTodayDeletedFilesNote(todayAnalysisMeta) {
   if (todayAnalysisMeta?.gitUnavailableReason === 'multi-root-workspace') {
@@ -97,7 +102,7 @@ function describeTodayDeletedFilesNote(todayAnalysisMeta) {
   }
   const sources = resolveTodaySources(todayAnalysisMeta);
   if (sources.deletedFiles === 'git-log') {
-    return '基于当前时间范围内的 Git 提交，仅展示文件路径。';
+    return '基于当前时间范围内的 Git 提交' + (todayAnalysisMeta?.gitRootLabel ? ('（当前 Git 根目录 ' + todayAnalysisMeta.gitRootLabel + '）') : '') + '，仅展示文件路径。';
   }
   return '当前工作区没有可用的 Git 数据，无法统计删除文件。';
 }
@@ -105,7 +110,20 @@ function describeProjectGitNote(stats) {
   if (stats.git.unavailableReason === 'multi-root-workspace') {
     return '多根工作区暂不支持 Git 提交趋势，请切换到单根工作区后再使用。';
   }
+  if (stats.git.rootLabel) {
+    return '当前 Git 根目录 ' + stats.git.rootLabel + ' 没有可读取的 Git 历史，或 Git 命令不可用。';
+  }
   return '当前工作区没有可读取的 Git 历史，或 Git 命令不可用。';
+}
+function renderGitRootSelectionBadge() {
+  if (!gitRoot?.isMultiRoot || !gitRoot.selected) return '';
+  return '<span class="summary-pill">当前 Git 仓库 ' + escapeHtml(gitRoot.selected.label) + '</span>';
+}
+function renderGitRootAction(compact) {
+  if (!gitRoot?.isMultiRoot || !gitRoot.selected) return '';
+  const className = compact ? 'action secondary' : 'action action-compact secondary';
+  const label = compact ? '切换 Git 仓库' : 'Git 仓库';
+  return '<button class="' + className + '" data-command="selectGitRoot">' + icon('git') + escapeHtml(label) + '</button>';
 }
 function icon(name, className) {
   const attrs = className ? ' class="' + className + '"' : '';
@@ -222,7 +240,8 @@ function renderGitStats(stats) {
     ? stats.git.topAuthors.map((item, index) => '<div class="author-item"><div class="author-left"><span class="dot" style="background:' + palette[index % palette.length] + '"></span><span>' + escapeHtml(item.name) + '</span></div><span class="muted">' + numberFormat(item.commits) + ' 次</span></div>').join('')
     : '<div class="muted">最近没有提交记录。</div>';
   const commitsChart = '<div class="chart" id="chart-git-weekly"></div><div class="git-bars chart-fallback">' + bars + '</div>';
-  return '<div class="git-grid"><div><div class="section-note">' + escapeHtml(stats.git.rangeLabel) + ' · 共 ' + numberFormat(stats.git.totalCommits) + ' 次提交</div>' + commitsChart + '</div><div><div class="section-note">贡献者 Top 5</div><div class="authors">' + authors + '</div></div></div>';
+  const rangeNote = (stats.git.rootLabel ? ('当前 Git 根目录 ' + stats.git.rootLabel + ' · ') : '') + stats.git.rangeLabel + ' · 共 ' + numberFormat(stats.git.totalCommits) + ' 次提交';
+  return '<div class="git-grid"><div><div class="section-note">' + escapeHtml(rangeNote) + '</div>' + commitsChart + '</div><div><div class="section-note">贡献者 Top 5</div><div class="authors">' + authors + '</div></div></div>';
 }
 function renderTodayFiles(files, emptyText) {
   if (!files || !files.length) return '<div class="empty-note">' + escapeHtml(emptyText) + '</div>';
@@ -674,10 +693,13 @@ if (todayStats) heroBadges.push('<span class="badge">' + escapeHtml(rangeHeading
 if (todayStats && todayStats.totals.deletedFiles) heroBadges.push('<span class="badge">' + escapeHtml(rangeHeading) + '删除 ' + numberFormat(todayStats.totals.deletedFiles) + ' 文件</span>');
 if (projectStats) heroBadges.push('<span class="badge">项目分析 ' + numberFormat(projectStats.totals.files) + ' 文件</span>');
 if (projectStats) heroBadges.push('<span class="badge">项目耗时 ' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '</span>');
+const gitRootBadgeHtml = renderGitRootSelectionBadge();
+if (gitRootBadgeHtml) heroBadges.push(gitRootBadgeHtml);
 const metaParts = [];
 metaParts.push('<span class="meta-item">工作区<strong>' + escapeHtml(workspaceName) + '</strong></span>');
 if (generatedLabel) metaParts.push('<span class="meta-dot" aria-hidden="true"></span><span class="meta-item">更新<strong>' + escapeHtml(generatedLabel) + '</strong></span>');
 if (projectStats) metaParts.push('<span class="meta-dot" aria-hidden="true"></span><span class="meta-item">耗时<strong>' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '</strong></span>');
+if (gitRoot?.isMultiRoot && gitRoot.selected) metaParts.push('<span class="meta-dot" aria-hidden="true"></span><span class="meta-item">Git 仓库<strong>' + escapeHtml(gitRoot.selected.label) + '</strong></span>');
 const metaHtml = metaParts.join('');
 
 const chipsHtml = heroBadges.slice(0, presentation.compact ? 2 : 4).join('');
@@ -687,13 +709,16 @@ if (todayStats) summaryPills.push('<span class="summary-pill">变更 ' + numberF
 if (todayStats) summaryPills.push('<span class="summary-pill">新增 ' + numberFormat(todayStats.totals.newFiles) + '</span>');
 if (todayStats && todayStats.totals.deletedFiles) summaryPills.push('<span class="summary-pill">删除 ' + numberFormat(todayStats.totals.deletedFiles) + '</span>');
 if (projectStats) summaryPills.push('<span class="summary-pill">项目 ' + numberFormat(projectStats.totals.files) + '</span>');
+if (gitRootBadgeHtml) summaryPills.push(gitRootBadgeHtml);
 const summaryPillsHtml = summaryPills.join('');
 
 const quickActionsHtml = presentation.compact
   ? '<button class="action" data-command="' + refreshRangeCommand + '">' + icon('refresh') + escapeHtml(refreshRangeLabel) + '</button>' +
+    renderGitRootAction(true) +
     '<button class="action secondary" data-command="openCompare">' + icon('git') + '变更对比</button>' +
     '<button class="action secondary" data-command="openPanel">' + icon('detail') + '详情分析</button>'
   : '<button class="action action-compact secondary" data-command="' + refreshRangeCommand + '">' + icon('refresh') + '刷新</button>' +
+    renderGitRootAction(false) +
     '<button class="action action-compact" data-command="showStats">' + icon('project') + '分析</button>' +
     '<button class="action action-compact secondary" data-command="openCompare">' + icon('git') + '对比</button>';
 
@@ -724,6 +749,9 @@ const menuHtml =
         '<div class="menu-title">视图</div>' +
         '<button class="menu-item" data-command="openPanel" role="menuitem">' + icon('detail') + '<span class="menu-label">打开详细看板</span><span class="menu-hint">Panel</span></button>' +
         '<button class="menu-item" data-command="openCompare" role="menuitem">' + icon('git') + '<span class="menu-label">打开变更对比</span><span class="menu-hint">Compare</span></button>' +
+        (gitRoot?.isMultiRoot && gitRoot.selected
+          ? '<button class="menu-item" data-command="selectGitRoot" role="menuitem">' + icon('git') + '<span class="menu-label">切换 Git 仓库</span><span class="menu-hint">' + escapeHtml(gitRoot.selected.label) + '</span></button>'
+          : '') +
       '</div>' +
       '<div class="menu-group">' +
         '<div class="menu-title">导出</div>' +
@@ -784,6 +812,12 @@ const floatingBarHtml = !presentation.compact
         icon('git', 'fab-icon') +
         '<span class="fab-label">变更对比</span>' +
       '</button>' +
+      (gitRoot?.isMultiRoot && gitRoot.selected
+        ? '<button class="fab-button" style="--i:3.5" data-command="selectGitRoot" aria-label="切换 Git 仓库">' +
+            icon('git', 'fab-icon') +
+            '<span class="fab-label">Git 仓库</span>' +
+          '</button>'
+        : '') +
       '<button class="fab-button" style="--i:4" data-command="exportJson" aria-label="导出 JSON"' + (projectStats ? '' : ' disabled') + '>' +
         icon('json', 'fab-icon') +
         '<span class="fab-label">导出 JSON</span>' +

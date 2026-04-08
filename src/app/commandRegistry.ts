@@ -19,6 +19,9 @@ export function registerCodeInfoCommands(
     vscode.commands.registerCommand('codeInfo.openCompare', async () => {
       showComparePanel(comparePanelState, context.extensionUri);
     }),
+    vscode.commands.registerCommand('codeInfo.selectGitRoot', async () => {
+      await controller.selectGitRoot();
+    }),
     vscode.commands.registerCommand('codeInfo.showStats', async () => {
       const stats = await controller.analyzeProject({ revealPanel: true });
       if (!controller.hasTodayStats()) {
@@ -92,9 +95,10 @@ export function registerCodeInfoCommands(
         await exportStatsFile(stats, 'csv');
       }
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+    vscode.workspace.onDidChangeWorkspaceFolders(async () => {
       controller.resetWorkspaceState();
       resetComparePanel(comparePanelState);
+      await comparePanelState.gitRootContext?.refresh();
     })
   ];
 }

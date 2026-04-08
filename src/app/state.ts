@@ -1,5 +1,5 @@
 import type { AnalysisDateRangePreset } from '../analysis/dateRange';
-import type { DashboardData, TodayStats, WorkspaceStats } from '../types';
+import type { DashboardData, GitRootSelection, TodayStats, WorkspaceStats } from '../types';
 
 export type CodeInfoAppState = {
   latestProjectStats: WorkspaceStats | undefined;
@@ -27,9 +27,10 @@ export function clearCodeInfoAppState(state: CodeInfoAppState): void {
   state.refreshTodayTaskPreset = undefined;
 }
 
-export function getDashboardData(state: CodeInfoAppState): DashboardData {
+export function getDashboardData(state: CodeInfoAppState, gitRoot?: GitRootSelection): DashboardData {
   return {
     projectStats: state.latestProjectStats,
-    todayStats: state.latestTodayStats
+    todayStats: state.latestTodayStats,
+    gitRoot
   };
 }

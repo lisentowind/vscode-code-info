@@ -298,6 +298,7 @@ export function getDashboardHtml(
 function getDashboardFallbackHtml(data: DashboardData, presentation: PresentationMode): string {
   const todayStats = data.todayStats;
   const projectStats = data.projectStats;
+  const gitRoot = data.gitRoot;
   const workspaceName = projectStats?.workspaceName ?? todayStats?.workspaceName ?? presentation.subtitle ?? '当前工作区';
   const rangeLabel = todayStats?.rangeLabel ?? '今天';
   const updatedAt = todayStats?.generatedAt ?? projectStats?.generatedAt;
@@ -343,9 +344,11 @@ function getDashboardFallbackHtml(data: DashboardData, presentation: Presentatio
       <div class="todo-item"><span>工作区</span><span class="muted">${escapeHtml(workspaceName)}</span></div>
       <div class="todo-item"><span>范围</span><span class="muted">${escapeHtml(rangeLabel)}</span></div>
       <div class="todo-item"><span>更新时间</span><span class="muted">${escapeHtml(updatedAt ?? '未知')}</span></div>
+      ${gitRoot?.isMultiRoot && gitRoot.selected ? `<div class="todo-item"><span>当前 Git 仓库</span><span class="muted">${escapeHtml(gitRoot.selected.label)}</span></div>` : ''}
       ${rangeSourceSummary ? `<div class="todo-item"><span>文件活动来源</span><span class="muted">${escapeHtml(rangeSourceSummary)}</span></div>` : ''}
       ${gitSummary ? `<div class="todo-item"><span>Git 趋势</span><span class="muted">${escapeHtml(gitSummary)}</span></div>` : ''}
     </div>
+    ${gitRoot?.isMultiRoot ? '<div class="inline-actions"><button class="action action-slim secondary" data-command="selectGitRoot">切换 Git 仓库</button></div>' : ''}
   </section>
     ${summaryHtml}
   </main>`;
@@ -370,7 +373,7 @@ function describeProjectGitStatus(git: GitStats | undefined): string | undefined
   }
 
   if (git.available) {
-    return `${git.rangeLabel} 可用`;
+    return `${git.rootLabel ? `当前 Git 根目录 ${git.rootLabel} · ` : ''}${git.rangeLabel} 可用`;
   }
 
   return describeGitAvailabilityLabel(git.unavailableReason, false);

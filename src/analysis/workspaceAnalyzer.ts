@@ -17,6 +17,13 @@ import { findWorkspaceFilesForAnalysis, getWorkerCount, isBinaryLike } from './t
 import { resolveWorkspaceGitSupport } from '../workspace/rootSupport';
 
 export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats> {
+  return analyzeWorkspaceWithOptions(logger);
+}
+
+export async function analyzeWorkspaceWithOptions(
+  logger?: Logger,
+  options?: { gitRootPath?: string; gitRootLabel?: string }
+): Promise<WorkspaceStats> {
   const startTime = Date.now();
   const folders = vscode.workspace.workspaceFolders;
 
@@ -41,9 +48,10 @@ export async function analyzeWorkspace(logger?: Logger): Promise<WorkspaceStats>
   const todoHotspots = buildTodoHotspots(fileStats);
   const insights = buildWorkspaceInsights(totals, languages, directories, todoSummary);
   const gitSupport = resolveWorkspaceGitSupport(folders);
-  const git = gitSupport.supported
-    ? await analyzeGitHistory(gitRoot)
-    : createUnavailableGitStats(gitSupport.reason);
+  const gitRootPath = options?.gitRootPath ?? (gitSupport.supported ? gitRoot : undefined);
+  const git = gitRootPath
+    ? { ...(await analyzeGitHistory(gitRootPath)), rootLabel: options?.gitRootLabel ?? folders[0]?.name }
+    : createUnavailableGitStats(gitSupport.supported ? 'not-git-repository' : gitSupport.reason);
   const durationMs = Date.now() - startTime;
   const generatedAt = createGeneratedAt();
 

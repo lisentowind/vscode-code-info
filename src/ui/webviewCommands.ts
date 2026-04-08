@@ -34,6 +34,9 @@ export async function handleWebviewCommand(message?: WebviewCommandMessage): Pro
     case 'openCompare':
       await vscode.commands.executeCommand('codeInfo.openCompare');
       return;
+    case 'selectGitRoot':
+      await vscode.commands.executeCommand('codeInfo.selectGitRoot');
+      return;
     case 'exportJson':
       await vscode.commands.executeCommand('codeInfo.exportJson');
       return;

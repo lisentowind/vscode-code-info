@@ -16,6 +16,7 @@ import { analyzeCompareSnapshots } from '../analysis/compareSnapshots';
 import { buildCompareSummaries } from '../analysis/compareSummaries';
 import { analyzeCompare } from '../analysis/compareAnalyzer';
 import {
+  applyCompareGitRootChange,
   applyComparePanelIcon,
   applyCompareModeChange,
   buildCompareRequestFromPanelState,
@@ -429,6 +430,45 @@ suite('Compare Primitives Test Suite', () => {
     assert.strictEqual(state.status, 'idle');
     assert.strictEqual(state.baseRef, '');
     assert.strictEqual(state.headRef, '');
+    assert.deepStrictEqual(state.gitRootOptions, []);
+    assert.strictEqual(state.selectedGitRootPath, '');
+  });
+
+  test('applyCompareGitRootChange resets compare result and points state at the new root', () => {
+    const state = applyCompareGitRootChange(
+      {
+        ...createInitialComparePanelState(),
+        baseRef: 'main',
+        headRef: 'feature/demo',
+        branchOptions: ['main', 'feature/demo'],
+        gitRootOptions: [
+          { label: 'client', rootPath: '/tmp/client' },
+          { label: 'server', rootPath: '/tmp/server' }
+        ],
+        selectedGitRootPath: '/tmp/client',
+        status: 'error',
+        latestError: 'stale error',
+        latestResult: {
+          compareSource: 'commits',
+          resolvedTargets: { source: 'commits', baseRef: 'base', headRef: 'head' },
+          summary: { changedFiles: 1, newFiles: 0, deletedFiles: 0, addedLines: 1, deletedLines: 0, netCodeLines: 1, todoDelta: 0 },
+          files: [],
+          languages: [],
+          directories: [],
+          hotspots: [],
+          analysisMeta: { durationMs: 10, totalFiles: 1, textComparableFiles: 1, skippedBinaryFiles: 0, skippedSubmoduleFiles: 0 }
+        }
+      },
+      '/tmp/server'
+    );
+
+    assert.strictEqual(state.selectedGitRootPath, '/tmp/server');
+    assert.strictEqual(state.status, 'idle');
+    assert.strictEqual(state.latestError, undefined);
+    assert.strictEqual(state.latestResult, undefined);
+    assert.deepStrictEqual(state.branchOptions, []);
+    assert.strictEqual(state.baseRef, '');
+    assert.strictEqual(state.headRef, '');
   });
 
   test('applyCompareModeChange resets inputs and error state when switching mode', () => {
@@ -715,11 +755,17 @@ suite('Compare Primitives Test Suite', () => {
       mode: 'branch' as const,
       baseRef: 'main',
       headRef: 'feature/demo',
+      selectedGitRootPath: '/tmp/client',
+      gitRootOptions: [
+        { label: 'client', rootPath: '/tmp/client' },
+        { label: 'server', rootPath: '/tmp/server' }
+      ],
       branchOptions: ['main', 'master', 'feature/demo']
     };
 
     const html = getCompareHtml({ cspSource: 'vscode-webview:' } as vscode.Webview, state as never);
 
+    assert.ok(html.includes('id="gitRootPath"'));
     assert.ok(html.includes('id="branchBaseRef"'));
     assert.ok(html.includes('id="branchHeadRef"'));
     assert.ok(html.includes('<select'));

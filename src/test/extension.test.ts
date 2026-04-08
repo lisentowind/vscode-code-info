@@ -11,9 +11,11 @@ import { buildDirectorySummaries, buildDirectoryTree } from '../analysis/summari
 import { sortTouchedFiles } from '../analysis/todayAnalyzer';
 import { buildWeeklyBuckets, getWeekBucketKey, parseDeletedFilesOutput, parseNumstatOutput } from '../git/common';
 import { getSingleRootPathOrError, resolveWorkspaceGitSupport } from '../workspace/rootSupport';
+import { buildGitRootOptions, resolveSelectedGitRootOption } from '../workspace/gitRootContext';
 import { createDashboardPanelOptions, getDashboardPanelTitle } from '../ui/panels';
 import { buildDashboardShellHtml, buildDashboardWebviewResources } from '../webview/dashboardShell';
 import { getDashboardHtml, getEmptyStateHtml } from '../webview/templates';
+import { handleWebviewCommand } from '../ui/webviewCommands';
 import type { TextFileAnalysisResult } from '../analysis/fileAnalyzer';
 import type { FileStat } from '../types';
 
@@ -248,6 +250,25 @@ suite('Extension Test Suite', () => {
         rootPath: '/tmp/app'
       }
     );
+  });
+
+  test('buildGitRootOptions and resolveSelectedGitRootOption restore saved root or fall back to first option', () => {
+    const options = buildGitRootOptions([
+      { name: 'client', uri: vscode.Uri.file('/tmp/client') },
+      { name: 'server', uri: vscode.Uri.file('/tmp/server') }
+    ] as never);
+
+    assert.deepStrictEqual(
+      options.map((option) => ({ label: option.label, rootPath: option.rootPath })),
+      [
+        { label: 'client', rootPath: '/tmp/client' },
+        { label: 'server', rootPath: '/tmp/server' }
+      ]
+    );
+
+    assert.deepStrictEqual(resolveSelectedGitRootOption(options, '/tmp/server'), options[1]);
+    assert.deepStrictEqual(resolveSelectedGitRootOption(options, '/tmp/missing'), options[0]);
+    assert.strictEqual(resolveSelectedGitRootOption([], '/tmp/none'), undefined);
   });
 
   test('getSingleRootPathOrError rejects compare usage in multi-root workspaces with explicit guidance', () => {
@@ -973,6 +994,121 @@ suite('Extension Test Suite', () => {
     assert.ok(html.includes('Git 趋势'));
   });
 
+  test('dashboard shell fallback shows the active git root and switch action for multi-root workspaces', () => {
+    const html = getDashboardHtml(
+      { cspSource: 'vscode-webview:' } as vscode.Webview,
+      {
+        gitRoot: {
+          isMultiRoot: true,
+          options: [
+            { label: 'client', rootPath: '/tmp/client' },
+            { label: 'server', rootPath: '/tmp/server' }
+          ],
+          selected: { label: 'server', rootPath: '/tmp/server' }
+        },
+        todayStats: {
+          workspaceName: 'Multi-root Workspace',
+          generatedAt: new Date(2026, 3, 2, 10, 0, 0).toISOString(),
+          generatedAtMs: new Date(2026, 3, 2, 10, 0, 0).getTime(),
+          rangePreset: 'today',
+          rangeLabel: '今天',
+          totals: {
+            touchedFiles: 2,
+            newFiles: 1,
+            deletedFiles: 0,
+            lines: 20,
+            codeLines: 12,
+            commentLines: 5,
+            blankLines: 3,
+            bytes: 200,
+            todoCount: 1,
+            addedLines: 0,
+            deletedLines: 0,
+            changedLines: 0
+          },
+          languages: [],
+          touchedFiles: [],
+          newFiles: [],
+          deletedFiles: [],
+          todoLocations: [],
+          insights: {
+            topLanguage: 'typescript',
+            topLanguageShare: 1,
+            topPath: 'server/src/a.ts',
+            todoTouchedCount: 1
+          },
+          analysisMeta: {
+            durationMs: 50,
+            matchedFiles: 10,
+            analyzedFiles: 2,
+            skippedBinaryFiles: 0,
+            skippedUnreadableFiles: 0,
+            scopeSummary: '全工作区',
+            gitAvailable: true,
+            gitRootLabel: 'server',
+            gitSince: '2026-04-02',
+            sources: {
+              touchedFiles: 'filesystem-mtime',
+              newFiles: 'filesystem-birthtime',
+              deletedFiles: 'git-log',
+              lineDeltas: 'git-log'
+            }
+          }
+        },
+        projectStats: {
+          workspaceName: 'Multi-root Workspace',
+          generatedAt: new Date(2026, 3, 2, 10, 0, 0).toISOString(),
+          generatedAtMs: new Date(2026, 3, 2, 10, 0, 0).getTime(),
+          totals: { files: 20, lines: 40, codeLines: 25, commentLines: 8, blankLines: 7, bytes: 400 },
+          languages: [],
+          directories: [],
+          directoryTree: [],
+          largestFiles: [],
+          files: [],
+          todoSummary: [],
+          todoHotspots: [],
+          todoLocations: [],
+          insights: {
+            averageLinesPerFile: 2,
+            averageCodeLinesPerFile: 1,
+            commentRatio: 0.5,
+            topLanguage: 'typescript',
+            topLanguageShare: 1,
+            topDirectory: 'server',
+            totalTodoCount: 0,
+            todoDensity: 0
+          },
+          analysisMeta: {
+            durationMs: 80,
+            matchedFiles: 20,
+            analyzedFiles: 20,
+            skippedBinaryFiles: 0,
+            skippedUnreadableFiles: 0,
+            scopeSummary: '全工作区'
+          },
+          git: {
+            available: true,
+            rootLabel: 'server',
+            rangeLabel: '最近 12 周',
+            totalCommits: 3,
+            weeklyCommits: [],
+            topAuthors: []
+          }
+        }
+      },
+      {
+        compact: false,
+        title: 'Code Info',
+        subtitle: 'demo'
+      }
+    );
+
+    assert.ok(html.includes('当前 Git 仓库'));
+    assert.ok(html.includes('server'));
+    assert.ok(html.includes('切换 Git 仓库'));
+    assert.ok(html.includes('data-command="selectGitRoot"'));
+  });
+
   test('dashboard runtime includes explicit multi-root git fallback copy', () => {
     const runtime = readFileSync(
       join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
@@ -980,6 +1116,15 @@ suite('Extension Test Suite', () => {
     );
 
     assert.ok(runtime.includes('多根工作区暂不支持 Git 提交趋势'));
+  });
+
+  test('dashboard runtime wires the select git root action', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('selectGitRoot'));
   });
 
   test('dashboard runtime guards against a missing app container before writing innerHTML', () => {
@@ -990,5 +1135,26 @@ suite('Extension Test Suite', () => {
 
     assert.ok(runtime.includes("showError('Code Info dashboard root container is missing.')"));
     assert.ok(runtime.includes('if (!app) {'));
+  });
+
+  test('handleWebviewCommand dispatches select git root to the extension command', async () => {
+    const commandsApi = vscode.commands as unknown as {
+      executeCommand: (command: string) => Thenable<unknown>;
+    };
+    const originalExecuteCommand = commandsApi.executeCommand;
+    const seen: string[] = [];
+
+    commandsApi.executeCommand = async (command: string) => {
+      seen.push(command);
+      return undefined;
+    };
+
+    try {
+      await handleWebviewCommand({ command: 'selectGitRoot' });
+    } finally {
+      commandsApi.executeCommand = originalExecuteCommand;
+    }
+
+    assert.deepStrictEqual(seen, ['codeInfo.selectGitRoot']);
   });
 });

@@ -87,9 +87,21 @@ export type GitAuthor = {
   commits: number;
 };
 
+export type GitRootOption = {
+  label: string;
+  rootPath: string;
+};
+
+export type GitRootSelection = {
+  isMultiRoot: boolean;
+  options: GitRootOption[];
+  selected?: GitRootOption;
+};
+
 export type GitStats = {
   available: boolean;
   unavailableReason?: GitUnavailableReason;
+  rootLabel?: string;
   rangeLabel: string;
   totalCommits: number;
   weeklyCommits: GitWeek[];
@@ -187,6 +199,7 @@ export type TodayStats = {
 export type DashboardData = {
   projectStats?: WorkspaceStats;
   todayStats?: TodayStats;
+  gitRoot?: GitRootSelection;
 };
 
 export type WorkspaceInsights = {
@@ -209,6 +222,7 @@ export type AnalysisMeta = {
   scopeSummary: string;
   gitAvailable?: boolean;
   gitUnavailableReason?: GitUnavailableReason;
+  gitRootLabel?: string;
   gitSince?: string;
   sources?: TodayAnalysisSources;
 };

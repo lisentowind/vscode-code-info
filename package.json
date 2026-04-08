@@ -49,6 +49,12 @@
         "shortTitle": "对比"
       },
       {
+        "command": "codeInfo.selectGitRoot",
+        "title": "切换 Git 仓库",
+        "category": "代码信息",
+        "shortTitle": "Git"
+      },
+      {
         "command": "codeInfo.refreshStats",
         "title": "刷新统计",
         "category": "代码信息",
