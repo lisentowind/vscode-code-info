@@ -11,8 +11,8 @@ export function getEmptyStateHtml(
   const showOpenPanel = options?.showOpenPanel ?? true;
   const cssUri = options?.cssUri;
   const gsapUri = options?.gsapUri;
-  const title = compact ? 'Code Info 侧边栏' : 'Code Info';
-  const subtitle = compact ? '先切到插件加载今日统计，再按需执行项目分析。' : '先切到插件加载今日统计，再打开完整项目分析看板。';
+  const title = compact ? 'Code Info 工作台' : 'Code Info';
+  const subtitle = compact ? '先拿到今日统计，再把侧边栏当成你的日常开发工作台。' : '先切到插件加载今日统计，再打开完整项目分析看板。';
   const openPanelButton = showOpenPanel ? '<button class="action secondary" data-command="openPanel">打开看板</button>' : '';
   const openCompareButton = '<button class="action secondary" data-command="openCompare">变更对比</button>';
 

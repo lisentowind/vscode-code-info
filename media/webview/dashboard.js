@@ -28,18 +28,21 @@ const todayStats = data.todayStats;
 const gitRoot = data.gitRoot;
 const compactMenuClass = presentation.compact ? ' menu-compact' : '';
 const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-let app = document.getElementById('app');
-if (!app) {
-  app = document.createElement('div');
-  app.id = 'app';
-  document.body?.appendChild(app);
+let dashboardMounted = false;
+
+function ensureDashboardAppRoot() {
+  let app = document.getElementById('app');
+  if (!app && document.body) {
+    app = document.createElement('div');
+    app.id = 'app';
+    document.body.appendChild(app);
+  }
+  if (app) {
+    app.className = 'shell shell-dashboard';
+  }
+  document.body?.classList.add('dashboard-shell');
+  return app;
 }
-if (!app) {
-  showError('Code Info dashboard root container is missing.');
-} else {
-  app.className = 'shell shell-dashboard';
-}
-document.body?.classList.add('dashboard-shell');
 
 function escapeHtml(value) {
   return String(value)
@@ -712,6 +715,183 @@ if (projectStats) summaryPills.push('<span class="summary-pill">项目 ' + numbe
 if (gitRootBadgeHtml) summaryPills.push(gitRootBadgeHtml);
 const summaryPillsHtml = summaryPills.join('');
 
+function buildSidebarHeadline() {
+  if (todayStats) {
+    const deletedSuffix = todayStats.totals.deletedFiles ? ('，删除 ' + numberFormat(todayStats.totals.deletedFiles) + ' 个') : '';
+    const todoSuffix = todayStats.totals.todoCount ? ('，待办 ' + numberFormat(todayStats.totals.todoCount) + ' 个') : '';
+    return rangeHeading + '改了 ' + numberFormat(todayStats.totals.touchedFiles) + ' 个文件，新增 ' + numberFormat(todayStats.totals.newFiles) + ' 个' + deletedSuffix + todoSuffix;
+  }
+
+  if (projectStats) {
+    return '项目共有 ' + numberFormat(projectStats.totals.files) + ' 个文件，主力语言是 ' + escapeHtml(projectStats.insights.topLanguage || '—') + '。';
+  }
+
+  return '先刷新今日统计，再按需打开详情页继续看。';
+}
+
+function rankSidebarTouchedFiles(files) {
+  return [...(files || [])]
+    .map((file) => {
+      const priorityScore =
+        (file.status === 'new' ? 28 : 0) +
+        Math.min(file.todoCounts?.total || 0, 6) * 10 +
+        Math.min(Math.round((file.codeLines || 0) / 40), 8) * 6 +
+        Math.min(Math.round(Math.max(Date.now() - (file.modifiedAtTimestamp || 0), 0) / 60000), 240) * -0.02;
+      const priorityLevel = priorityScore >= 58 ? '高优先级' : priorityScore >= 28 ? '中优先级' : '低优先级';
+      return { ...file, priorityScore, priorityLevel };
+    })
+    .sort((left, right) => right.priorityScore - left.priorityScore || right.modifiedAtTimestamp - left.modifiedAtTimestamp);
+}
+
+function buildSidebarTouchedFileReasons(file) {
+  const reasons = [];
+  if (file.status === 'new') reasons.push('新文件');
+  if ((file.todoCounts?.total || 0) > 0) reasons.push('待办 ' + numberFormat(file.todoCounts.total));
+  if ((file.codeLines || 0) >= 120) reasons.push('代码量大');
+  if (!reasons.length) reasons.push('最近改动');
+  return reasons.join(' · ');
+}
+
+function buildSidebarTodoRiskHints() {
+  const touchedFiles = todayStats?.touchedFiles || [];
+  const touchedByPath = new Map(touchedFiles.map((file) => [file.path, file]));
+  const hints = [];
+
+  for (const hotspot of projectStats?.todoHotspots || []) {
+    const touched = touchedByPath.get(hotspot.path);
+    const score =
+      hotspot.total * 10 +
+      hotspot.fixme * 6 +
+      hotspot.hack * 5 +
+      (touched ? 18 : 0) +
+      (touched?.status === 'new' ? 10 : 0);
+    const riskLevel = score >= 44 ? '高风险' : score >= 22 ? '中风险' : '关注';
+    const riskHint = touched ? '今天改动 + 待办' : '待办积压';
+    hints.push({
+      path: hotspot.path,
+      resource: hotspot.resource,
+      language: hotspot.language,
+      riskLevel,
+      riskHint,
+      detail: 'TODO ' + numberFormat(hotspot.todo) + ' · FIXME ' + numberFormat(hotspot.fixme) + ' · HACK ' + numberFormat(hotspot.hack),
+      score
+    });
+  }
+
+  for (const location of todayStats?.todoLocations || []) {
+    if (hints.some((item) => item.path === location.path)) {
+      continue;
+    }
+    hints.push({
+      path: location.path,
+      resource: location.resource,
+      language: location.language,
+      riskLevel: '关注',
+      riskHint: '今天改动 + 待办',
+      detail: location.keyword + ' · ' + (location.preview || ''),
+      score: 12
+    });
+  }
+
+  return hints.sort((left, right) => right.score - left.score).slice(0, 3);
+}
+
+function renderSidebarStatusRows() {
+  const rows = [
+    '<div class="sidebar-workbench-meta-row"><span>范围</span><strong>' + escapeHtml(rangeLabel) + '</strong></div>'
+  ];
+  if (gitRoot?.isMultiRoot && gitRoot.selected) {
+    rows.push('<div class="sidebar-workbench-meta-row"><span>Git 仓库</span><strong>' + escapeHtml(gitRoot.selected.label) + '</strong></div>');
+  }
+  if (generatedLabel) {
+    rows.push('<div class="sidebar-workbench-meta-row"><span>更新时间</span><strong>' + escapeHtml(generatedLabel) + '</strong></div>');
+  }
+  if (todayStats?.analysisMeta?.gitAvailable && todayStats.analysisMeta.gitSince) {
+    rows.push('<div class="sidebar-workbench-meta-row"><span>Git 范围</span><strong>' + escapeHtml(todayStats.analysisMeta.gitSince) + '</strong></div>');
+  }
+  return rows.join('');
+}
+
+function renderSidebarFileFocus() {
+  const files = rankSidebarTouchedFiles(todayStats?.touchedFiles || []).slice(0, 3);
+  if (!files.length) {
+    return '<div class="empty-note">当前范围内还没有可展示的重点变更文件。</div>';
+  }
+  return '<div class="sidebar-workbench-list">' + files.map((file) => {
+    const statusText = file.status === 'new' ? '新增' : '修改';
+    return '<div class="sidebar-workbench-item">' +
+      '<div class="sidebar-workbench-item-main"><div class="file-entry">' + fileTypeIcon(file.language, file.path) + fileButton(file.path, file.resource) + '</div><span class="sidebar-workbench-kicker">优先看 · ' + escapeHtml(file.priorityLevel) + ' · ' + escapeHtml(buildSidebarTouchedFileReasons(file)) + '</span><span class="sidebar-workbench-kicker">' + escapeHtml(statusText) + ' · ' + escapeHtml(file.modifiedAt) + '</span></div>' +
+      '<span class="sidebar-workbench-value"><span class="sidebar-workbench-badge">' + escapeHtml(file.priorityLevel) + '</span><span>' + numberFormat(file.codeLines) + ' 行</span></span>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+function renderSidebarTodoFocus() {
+  const hints = buildSidebarTodoRiskHints();
+  if (hints.length) {
+    return '<div class="sidebar-workbench-list">' + hints.map((item) => {
+      return '<div class="sidebar-workbench-item">' +
+        '<div class="sidebar-workbench-item-main"><div class="file-entry">' + fileTypeIcon(item.language, item.path) + fileButton(item.path, item.resource) + '</div><span class="sidebar-workbench-kicker">风险提示 · ' + escapeHtml(item.riskHint) + '</span><span class="sidebar-workbench-kicker">' + escapeHtml(item.detail) + '</span></div>' +
+        '<span class="sidebar-workbench-value"><span class="sidebar-workbench-badge">' + escapeHtml(item.riskLevel) + '</span></span>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  return '<div class="empty-note">当前没有突出的待办热点。</div>';
+}
+
+function renderSidebarQuickActions() {
+  return '<div class="sidebar-workbench-actions">' +
+    '<button class="action" data-command="' + refreshRangeCommand + '">' + icon('refresh') + escapeHtml(refreshRangeLabel) + '</button>' +
+    '<button class="action secondary" data-command="openCompare">' + icon('git') + '变更对比</button>' +
+    '<button class="action secondary" data-command="openPanel">' + icon('detail') + '详情分析</button>' +
+    '<button class="action secondary" data-command="' + (projectStats ? 'refresh' : 'showStats') + '">' + icon('project') + (projectStats ? '重新分析项目' : '开始项目分析') + '</button>' +
+    '<button class="action secondary" data-command="selectScope">' + icon('scope') + '选择目录</button>' +
+    (gitRoot?.isMultiRoot && gitRoot.selected ? '<button class="action secondary" data-command="selectGitRoot">' + icon('git') + '切换 Git 仓库</button>' : '') +
+  '</div>';
+}
+
+function renderSidebarProjectDigest() {
+  if (!projectStats) {
+    return '<div class="sidebar-workbench-digest-grid">' +
+      '<div class="sidebar-workbench-digest-card"><span class="sidebar-workbench-digest-label">项目分析</span><strong class="sidebar-workbench-digest-value">未生成</strong><span class="sidebar-workbench-kicker">点击上方按钮开始全量分析</span></div>' +
+    '</div>';
+  }
+
+  return '<div class="sidebar-workbench-digest-grid">' +
+    '<div class="sidebar-workbench-digest-card"><span class="sidebar-workbench-digest-label">主力语言</span><strong class="sidebar-workbench-digest-value">' + escapeHtml(projectStats.insights.topLanguage || '—') + '</strong><span class="sidebar-workbench-kicker">' + percent(projectStats.insights.topLanguageShare, 1) + ' 占比</span></div>' +
+    '<div class="sidebar-workbench-digest-card"><span class="sidebar-workbench-digest-label">核心目录</span><strong class="sidebar-workbench-digest-value">' + escapeHtml(projectStats.insights.topDirectory || '—') + '</strong><span class="sidebar-workbench-kicker">代码量最高模块</span></div>' +
+    '<div class="sidebar-workbench-digest-card"><span class="sidebar-workbench-digest-label">项目文件</span><strong class="sidebar-workbench-digest-value">' + numberFormat(projectStats.totals.files) + '</strong><span class="sidebar-workbench-kicker">耗时 ' + escapeHtml(durationFormat(projectStats.analysisMeta.durationMs)) + '</span></div>' +
+    '<div class="sidebar-workbench-digest-card"><span class="sidebar-workbench-digest-label">Git 趋势</span><strong class="sidebar-workbench-digest-value">' + (projectStats.git.available ? numberFormat(projectStats.git.totalCommits) : '—') + '</strong><span class="sidebar-workbench-kicker">' + escapeHtml(projectStats.git.available ? ((projectStats.git.rootLabel ? projectStats.git.rootLabel + ' · ' : '') + projectStats.git.rangeLabel) : describeProjectGitNote(projectStats)) + '</span></div>' +
+  '</div>';
+}
+
+function renderCompactSidebarLayout() {
+  return '' +
+    '<main class="page sidebar-workbench">' +
+      '<section class="panel sidebar-workbench-hero">' +
+        '<div class="section-title">' + icon('dashboard') + '<h2>当前状态</h2></div>' +
+        '<div class="section-note">侧边栏现在只保留高频决策信息，不再复用详情页布局。</div>' +
+        '<div class="sidebar-workbench-headline">' + escapeHtml(buildSidebarHeadline()) + '</div>' +
+        '<div class="sidebar-workbench-meta">' + renderSidebarStatusRows() + '</div>' +
+      '</section>' +
+      '<section class="panel sidebar-workbench-focus">' +
+        '<div class="section-title">' + icon('today') + '<h2>今日该看什么</h2></div>' +
+        '<div class="section-note">' + escapeHtml(describeTodaySourceSummary(todayStats?.analysisMeta)) + '</div>' +
+        '<div class="sidebar-workbench-stack">' +
+          '<div class="sidebar-workbench-block"><div class="sidebar-workbench-block-title">变更概览</div>' + renderSidebarFileFocus() + '</div>' +
+          '<div class="sidebar-workbench-block"><div class="sidebar-workbench-block-title">待办热点</div>' + renderSidebarTodoFocus() + '</div>' +
+          '<div class="sidebar-workbench-block"><div class="sidebar-workbench-block-title">快速入口</div>' + renderSidebarQuickActions() + '</div>' +
+        '</div>' +
+      '</section>' +
+      '<section class="panel sidebar-workbench-digest">' +
+        '<div class="section-title">' + icon('project') + '<h2>项目速读</h2></div>' +
+        '<div class="section-note">保留长期有用的项目摘要，深度浏览交给详情页。</div>' +
+        renderSidebarProjectDigest() +
+      '</section>' +
+    '</main>';
+}
+
 const quickActionsHtml = presentation.compact
   ? '<button class="action" data-command="' + refreshRangeCommand + '">' + icon('refresh') + escapeHtml(refreshRangeLabel) + '</button>' +
     renderGitRootAction(true) +
@@ -875,10 +1055,12 @@ const topbarHtml = presentation.compact
       '</div>' +
     '</header>';
 
-let html = '' +
-  (presentation.compact
-    ? (topbarHtml + '<main class="page">')
-    : ('<div class="app-layout">' + sidebarHtml + '<div class="content">' + topbarHtml + '<main class="page">'));
+let html = '';
+
+if (presentation.compact) {
+  html = renderCompactSidebarLayout();
+} else {
+  html = '<div class="app-layout">' + sidebarHtml + '<div class="content">' + topbarHtml + '<main class="page">';
 
 if (todayStats) {
   html += '' +
@@ -950,7 +1132,8 @@ if (!presentation.compact && projectStats) {
     '</section>';
 }
 
-html += (presentation.compact ? '</main>' : '</main></div></div>' + floatingBarHtml);
+  html += '</main></div></div>' + floatingBarHtml;
+}
 const shellAtmosphereHtml = '<div class="ambient-orb orb-a" aria-hidden="true"></div><div class="ambient-orb orb-b" aria-hidden="true"></div>';
 const updateStickyTop = () => {
   const bar = document.querySelector('.topbar-inner') || document.querySelector('.topbar');
@@ -1211,151 +1394,162 @@ function initAnimations() {
   });
   vscode.setState({ ...motionState, dashboardIntroPlayed: true });
 }
-if (!app) {
-  showError('Code Info dashboard root container is missing.');
-} else {
+function mountDashboardApp() {
+  if (dashboardMounted) return;
+  const app = ensureDashboardAppRoot();
+  if (!app) {
+    showError('Code Info dashboard root container is missing.');
+    return;
+  }
+  dashboardMounted = true;
   app.innerHTML = shellAtmosphereHtml + '<div class="sticky-sentinel" aria-hidden="true"></div>' + html;
-}
-const topbar = document.querySelector('.topbar');
-const sentinel = document.querySelector('.sticky-sentinel');
-if (topbar && sentinel && typeof IntersectionObserver !== 'undefined') {
-  const observer = new IntersectionObserver(([entry]) => {
-    topbar.classList.toggle('floating', !entry.isIntersecting);
-    scheduleStickyTop();
-  }, { threshold: [0, 1] });
-  observer.observe(sentinel);
-}
-const topbarInner = document.querySelector('.topbar-inner');
-if (topbarInner && typeof ResizeObserver !== 'undefined') {
-  const ro = new ResizeObserver(() => scheduleStickyTop());
-  ro.observe(topbarInner);
-}
-const menus = Array.from(document.querySelectorAll('details.menu')).filter((menu) => menu instanceof HTMLDetailsElement);
-const syncCompactMenuPopover = (menu) => {
-  if (!(menu instanceof HTMLDetailsElement) || !menu.classList.contains('menu-compact')) return;
-  const popover = menu.querySelector('.menu-popover');
-  const summary = menu.querySelector('summary');
-  if (!(popover instanceof HTMLElement) || !(summary instanceof HTMLElement)) return;
+  const topbar = document.querySelector('.topbar');
+  const sentinel = document.querySelector('.sticky-sentinel');
+  if (topbar && sentinel && typeof IntersectionObserver !== 'undefined') {
+    const observer = new IntersectionObserver(([entry]) => {
+      topbar.classList.toggle('floating', !entry.isIntersecting);
+      scheduleStickyTop();
+    }, { threshold: [0, 1] });
+    observer.observe(sentinel);
+  }
+  const topbarInner = document.querySelector('.topbar-inner');
+  if (topbarInner && typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => scheduleStickyTop());
+    ro.observe(topbarInner);
+  }
+  const menus = Array.from(document.querySelectorAll('details.menu')).filter((menu) => menu instanceof HTMLDetailsElement);
+  const syncCompactMenuPopover = (menu) => {
+    if (!(menu instanceof HTMLDetailsElement) || !menu.classList.contains('menu-compact')) return;
+    const popover = menu.querySelector('.menu-popover');
+    const summary = menu.querySelector('summary');
+    if (!(popover instanceof HTMLElement) || !(summary instanceof HTMLElement)) return;
 
-  const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
-  const gutter = 12;
-  const preferredWidth = Math.max(220, Math.min(320, viewportWidth - gutter * 2));
-  const menuRect = menu.getBoundingClientRect();
-  const summaryRect = summary.getBoundingClientRect();
-  const maxLeft = Math.max(gutter, viewportWidth - gutter - preferredWidth);
-  const alignLeft = menu.classList.contains('menu-range');
-  const desiredLeft = alignLeft
-    ? Math.min(Math.max(summaryRect.left, gutter), maxLeft)
-    : Math.min(Math.max(summaryRect.right - preferredWidth, gutter), maxLeft);
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
+    const gutter = 12;
+    const preferredWidth = Math.max(220, Math.min(320, viewportWidth - gutter * 2));
+    const menuRect = menu.getBoundingClientRect();
+    const summaryRect = summary.getBoundingClientRect();
+    const maxLeft = Math.max(gutter, viewportWidth - gutter - preferredWidth);
+    const alignLeft = menu.classList.contains('menu-range');
+    const desiredLeft = alignLeft
+      ? Math.min(Math.max(summaryRect.left, gutter), maxLeft)
+      : Math.min(Math.max(summaryRect.right - preferredWidth, gutter), maxLeft);
 
-  popover.style.setProperty('--menu-inline-start', String(desiredLeft - menuRect.left) + 'px');
-  popover.style.setProperty('--menu-width', String(preferredWidth) + 'px');
-};
-const closeOpenMenus = (exceptMenu) => {
-  let didClose = false;
+    popover.style.setProperty('--menu-inline-start', String(desiredLeft - menuRect.left) + 'px');
+    popover.style.setProperty('--menu-width', String(preferredWidth) + 'px');
+  };
+  const closeOpenMenus = (exceptMenu) => {
+    let didClose = false;
+    for (const menu of menus) {
+      if (!(menu instanceof HTMLDetailsElement)) continue;
+      if (exceptMenu && menu === exceptMenu) continue;
+      if (!menu.open) continue;
+      menu.open = false;
+      didClose = true;
+    }
+    if (didClose) scheduleStickyTop();
+  };
   for (const menu of menus) {
     if (!(menu instanceof HTMLDetailsElement)) continue;
-    if (exceptMenu && menu === exceptMenu) continue;
-    if (!menu.open) continue;
-    menu.open = false;
-    didClose = true;
+    menu.addEventListener('toggle', () => {
+      if (menu.open) {
+        closeOpenMenus(menu);
+        syncCompactMenuPopover(menu);
+        if (typeof gsap !== 'undefined' && !prefersReducedMotion) {
+          const popover = menu.querySelector('.menu-popover');
+          if (popover) {
+            gsap.fromTo(popover, { autoAlpha: 0, y: -10, scale: 0.96 }, {
+              autoAlpha: 1,
+              y: 0,
+              scale: 1,
+              duration: 0.24,
+              ease: 'power2.out'
+            });
+          }
+        }
+      }
+      scheduleStickyTop();
+    });
   }
-  if (didClose) scheduleStickyTop();
-};
-for (const menu of menus) {
-  if (!(menu instanceof HTMLDetailsElement)) continue;
-  menu.addEventListener('toggle', () => {
-    if (menu.open) {
-      closeOpenMenus(menu);
-      syncCompactMenuPopover(menu);
-      if (typeof gsap !== 'undefined' && !prefersReducedMotion) {
-        const popover = menu.querySelector('.menu-popover');
-        if (popover) {
-          gsap.fromTo(popover, { autoAlpha: 0, y: -10, scale: 0.96 }, {
-            autoAlpha: 1,
-            y: 0,
-            scale: 1,
-            duration: 0.24,
-            ease: 'power2.out'
+  document.addEventListener('pointerdown', (event) => {
+    const hasOpenMenu = menus.some((menu) => menu instanceof HTMLDetailsElement && menu.open);
+    if (!hasOpenMenu) return;
+    if (event.target instanceof Node && menus.some((menu) => menu instanceof HTMLDetailsElement && menu.contains(event.target))) return;
+    closeOpenMenus();
+  }, { capture: true });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeOpenMenus();
+  });
+  window.addEventListener('scroll', () => {
+    if (!menus.some((menu) => menu instanceof HTMLDetailsElement && menu.open)) return;
+    closeOpenMenus();
+  }, { passive: true });
+  scheduleStickyTop();
+  for (const menu of menus) {
+    syncCompactMenuPopover(menu);
+  }
+  registerSurfaceGlow('.card, .panel, .nav-item, .rail-chip, .menu-item, .fab-button, .compare-card, .compare-file-row, .compare-delta-row, .step');
+  initNavObserver();
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(() => {
+      scheduleStickyTop();
+      for (const menu of menus) syncCompactMenuPopover(menu);
+    }).catch(() => {});
+  }
+  window.addEventListener('load', () => scheduleStickyTop(), { once: true });
+  window.addEventListener('load', () => {
+    for (const menu of menus) syncCompactMenuPopover(menu);
+  }, { once: true });
+  window.addEventListener('resize', () => {
+    scheduleStickyTop();
+    for (const menu of menus) syncCompactMenuPopover(menu);
+  }, { passive: true });
+  initCharts();
+  initAnimations();
+  document.addEventListener('click', (event) => {
+    const navElement = event.target.closest('[data-nav]');
+    if (navElement) {
+      const targetId = navElement.getAttribute('data-nav');
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        highlightSectionFocus(target);
+        if (typeof gsap !== 'undefined' && !prefersReducedMotion) {
+          gsap.fromTo(target, { y: 12 }, { y: 0, duration: 0.42, ease: 'power2.out' });
+          gsap.fromTo(target, {
+            boxShadow: '0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent)'
+          }, {
+            boxShadow: '0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 22px 44px color-mix(in srgb, black 14%, transparent)',
+            duration: 0.34,
+            yoyo: true,
+            repeat: 1
           });
         }
       }
+      return;
     }
-    scheduleStickyTop();
-  });
-}
-document.addEventListener('pointerdown', (event) => {
-  const hasOpenMenu = menus.some((menu) => menu instanceof HTMLDetailsElement && menu.open);
-  if (!hasOpenMenu) return;
-  if (event.target instanceof Node && menus.some((menu) => menu instanceof HTMLDetailsElement && menu.contains(event.target))) return;
-  closeOpenMenus();
-}, { capture: true });
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeOpenMenus();
-});
-window.addEventListener('scroll', () => {
-  if (!menus.some((menu) => menu instanceof HTMLDetailsElement && menu.open)) return;
-  closeOpenMenus();
-}, { passive: true });
-scheduleStickyTop();
-for (const menu of menus) {
-  syncCompactMenuPopover(menu);
-}
-registerSurfaceGlow('.card, .panel, .nav-item, .rail-chip, .menu-item, .fab-button, .compare-card, .compare-file-row, .compare-delta-row, .step');
-initNavObserver();
-if (document.fonts?.ready) {
-  document.fonts.ready.then(() => {
-    scheduleStickyTop();
-    for (const menu of menus) syncCompactMenuPopover(menu);
-  }).catch(() => {});
-}
-window.addEventListener('load', () => scheduleStickyTop(), { once: true });
-window.addEventListener('load', () => {
-  for (const menu of menus) syncCompactMenuPopover(menu);
-}, { once: true });
-window.addEventListener('resize', () => {
-  scheduleStickyTop();
-  for (const menu of menus) syncCompactMenuPopover(menu);
-}, { passive: true });
-initCharts();
-initAnimations();
-document.addEventListener('click', (event) => {
-  const navElement = event.target.closest('[data-nav]');
-  if (navElement) {
-    const targetId = navElement.getAttribute('data-nav');
-    const target = targetId ? document.getElementById(targetId) : null;
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      highlightSectionFocus(target);
-      if (typeof gsap !== 'undefined' && !prefersReducedMotion) {
-        gsap.fromTo(target, { y: 12 }, { y: 0, duration: 0.42, ease: 'power2.out' });
-        gsap.fromTo(target, {
-          boxShadow: '0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent)'
-        }, {
-          boxShadow: '0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 22px 44px color-mix(in srgb, black 14%, transparent)',
-          duration: 0.34,
-          yoyo: true,
-          repeat: 1
-        });
-      }
-    }
-    return;
-  }
 
-  const element = event.target.closest('[data-command]');
-  if (!element) return;
-  if (element.hasAttribute('disabled')) return;
-  const lineAttr = element.getAttribute('data-line');
-  const characterAttr = element.getAttribute('data-character');
-  const line = lineAttr ? Number.parseInt(lineAttr, 10) : undefined;
-  const character = characterAttr ? Number.parseInt(characterAttr, 10) : undefined;
-  vscode.postMessage({
-    command: element.getAttribute('data-command'),
-    resource: element.getAttribute('data-resource') || undefined,
-    line: Number.isFinite(line) ? line : undefined,
-    character: Number.isFinite(character) ? character : undefined
+    const element = event.target.closest('[data-command]');
+    if (!element) return;
+    if (element.hasAttribute('disabled')) return;
+    const lineAttr = element.getAttribute('data-line');
+    const characterAttr = element.getAttribute('data-character');
+    const line = lineAttr ? Number.parseInt(lineAttr, 10) : undefined;
+    const character = characterAttr ? Number.parseInt(characterAttr, 10) : undefined;
+    vscode.postMessage({
+      command: element.getAttribute('data-command'),
+      resource: element.getAttribute('data-resource') || undefined,
+      line: Number.isFinite(line) ? line : undefined,
+      character: Number.isFinite(character) ? character : undefined
+    });
+    if (element.closest('details.menu')) {
+      closeOpenMenus();
+    }
   });
-  if (element.closest('details.menu')) {
-    closeOpenMenus();
-  }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', mountDashboardApp, { once: true });
+} else {
+  mountDashboardApp();
+}

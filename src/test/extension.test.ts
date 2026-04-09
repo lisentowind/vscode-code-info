@@ -804,6 +804,60 @@ suite('Extension Test Suite', () => {
     assert.ok(runtime.includes("renderDataLinkAttrs('project-language'"));
   });
 
+  test('dashboard runtime includes a dedicated compact sidebar workbench layout', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('sidebar-workbench'));
+    assert.ok(runtime.includes('renderCompactSidebarLayout'));
+  });
+
+  test('dashboard runtime labels compact sidebar sections as status, focus, and project digest', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('当前状态'));
+    assert.ok(runtime.includes('今日该看什么'));
+    assert.ok(runtime.includes('项目速读'));
+  });
+
+  test('dashboard runtime exposes sidebar workbench quick actions for high-frequency tasks', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('data-command="openCompare"'));
+    assert.ok(runtime.includes('data-command="openPanel"'));
+    assert.ok(runtime.includes('data-command="showStats"'));
+  });
+
+  test('dashboard runtime ranks sidebar change overview by priority instead of raw order', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('rankSidebarTouchedFiles'));
+    assert.ok(runtime.includes('优先看'));
+    assert.ok(runtime.includes('高优先级'));
+  });
+
+  test('dashboard runtime turns todo hotspots into explicit risk hints', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes('buildSidebarTodoRiskHints'));
+    assert.ok(runtime.includes('风险提示'));
+    assert.ok(runtime.includes('今天改动 + 待办'));
+  });
+
   test('dashboard shell injects runtime entry in compact and full layouts', () => {
     const compactHtml = getDashboardHtml(
       { cspSource: 'vscode-webview:' } as vscode.Webview,
@@ -1135,6 +1189,17 @@ suite('Extension Test Suite', () => {
 
     assert.ok(runtime.includes("showError('Code Info dashboard root container is missing.')"));
     assert.ok(runtime.includes('if (!app) {'));
+  });
+
+  test('dashboard runtime defers app mounting until the DOM is ready before touching innerHTML', () => {
+    const runtime = readFileSync(
+      join(__dirname, '..', '..', 'media', 'webview', 'dashboard.js'),
+      'utf8'
+    );
+
+    assert.ok(runtime.includes("document.readyState === 'loading'"));
+    assert.ok(runtime.includes('DOMContentLoaded'));
+    assert.ok(runtime.includes('mountDashboardApp'));
   });
 
   test('handleWebviewCommand dispatches select git root to the extension command', async () => {

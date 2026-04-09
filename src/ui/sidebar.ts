@@ -55,8 +55,8 @@ export class CodeInfoSidebarProvider implements vscode.WebviewViewProvider {
     const rangeLabel = data.todayStats?.rangeLabel ?? '今天';
     const presentation: PresentationMode = {
       compact: true,
-      title: `Code Info · ${rangeLabel}统计`,
-      subtitle: `展示 ${rangeLabel} 新增/修改文件；若工作区是 Git 仓库，也会补充删除文件与增删行统计。点“详情分析”打开大面板看范围 + 项目详情。`
+      title: `Code Info · 开发工作台`,
+      subtitle: `${rangeLabel}范围内的关键变化、热点和高频操作入口。`
     };
     this.view.webview.html = getDashboardHtml(this.view.webview, data, presentation, {
       echartsUri: resources.echartsUri,
